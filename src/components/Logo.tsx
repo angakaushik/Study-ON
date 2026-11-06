@@ -7,7 +7,6 @@ interface LogoProps {
 }
 
 export const Logo: React.FC<LogoProps> = ({ size = 'md', className = '', showSubtitle = false }) => {
-  // Dimensions
   const sizeMap = {
     sm: { box: 36, fontSize: 13, circleSize: 'w-9 h-9' },
     md: { box: 48, fontSize: 17, circleSize: 'w-12 h-12' },
@@ -20,11 +19,11 @@ export const Logo: React.FC<LogoProps> = ({ size = 'md', className = '', showSub
 
   return (
     <div className={`flex flex-col items-center justify-center ${className}`}>
-      {/* Clean circular logo: Light sky blue background, white circular boundary, attractive white handwritten style lettering "StudyOn" */}
+      {/* Clean circular logo in deep emerald & mint gradient */}
       <div
-        className={`${current.circleSize} rounded-full flex items-center justify-center shadow-md shadow-sky-200/60 transition-transform select-none shrink-0`}
+        className={`${current.circleSize} rounded-full flex items-center justify-center shadow-lg shadow-[#5cc79a]/20 transition-transform select-none shrink-0 border border-[#5cc79a]/40`}
         style={{
-          background: 'linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)',
+          background: 'linear-gradient(135deg, #1f3d30 0%, #16271f 50%, #0f1c18 100%)',
         }}
       >
         <svg
@@ -38,23 +37,23 @@ export const Logo: React.FC<LogoProps> = ({ size = 'md', className = '', showSub
             cx="50"
             cy="50"
             r="44"
-            stroke="rgba(255, 255, 255, 0.45)"
+            stroke="rgba(92, 199, 154, 0.5)"
             strokeWidth="1.5"
             strokeDasharray="3 3"
           />
-          {/* Handwritten style text "StudyOn" rendered with elegant curves */}
+          {/* Handwritten style text "StudyOn" rendered in mint emerald */}
           <text
             x="50"
             y="56"
             textAnchor="middle"
             dominantBaseline="middle"
-            fill="#ffffff"
+            fill="#5cc79a"
             fontFamily="'Caveat', cursive"
             fontWeight="700"
             fontSize="32"
             letterSpacing="-0.5px"
             style={{
-              textShadow: '0 1px 2px rgba(2, 132, 199, 0.4)',
+              textShadow: '0 1px 3px rgba(0, 0, 0, 0.6)',
             }}
           >
             StudyOn
@@ -64,8 +63,8 @@ export const Logo: React.FC<LogoProps> = ({ size = 'md', className = '', showSub
 
       {showSubtitle && (
         <div className="mt-3 text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">StudyOn</h1>
-          <p className="text-sm font-medium text-sky-700 tracking-wide">Student Educator</p>
+          <h1 className="text-2xl font-bold tracking-tight text-[#f0fdf4]">StudyOn</h1>
+          <p className="text-sm font-medium text-[#5cc79a] tracking-wide">ClassWatch Student Educator</p>
         </div>
       )}
     </div>

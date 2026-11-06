@@ -25,7 +25,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
   }, [onComplete]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky-50 via-white to-sky-100/70 flex flex-col items-center justify-center p-6 text-slate-800">
+    <div className="min-h-screen bg-gradient-to-b from-[#0f1c18] via-[#16271f] to-[#0f1c18] flex flex-col items-center justify-center p-6 text-[#e2e8f0]">
       <div className="w-full max-w-sm flex flex-col items-center text-center">
         {/* StudyOn Circular Logo */}
         <div className="relative mb-6">
@@ -33,17 +33,17 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
         </div>
 
         {/* App Title & Subtitle */}
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-1">
+        <h1 className="text-3xl font-bold tracking-tight text-[#f0fdf4] mb-1">
           StudyOn
         </h1>
-        <p className="text-base font-semibold text-sky-700 tracking-wide mb-8">
-          Student Educator
+        <p className="text-base font-semibold text-[#5cc79a] tracking-wide mb-8">
+          ClassWatch Student Educator
         </p>
 
-        {/* Clean minimal loading indicator */}
-        <div className="w-48 h-1.5 bg-sky-100 rounded-full overflow-hidden shadow-inner mb-6">
+        {/* Clean green loading indicator */}
+        <div className="w-48 h-1.5 bg-[#1f3d30] rounded-full overflow-hidden shadow-inner mb-6 border border-[#233a30]">
           <div
-            className="h-full bg-sky-500 rounded-full transition-all duration-150 ease-out"
+            className="h-full bg-[#5cc79a] rounded-full transition-all duration-150 ease-out shadow-[0_0_8px_rgba(92,199,154,0.6)]"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -51,7 +51,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
         {/* Skip button for instant access without waiting */}
         <button
           onClick={onComplete}
-          className="text-xs font-medium text-slate-500 hover:text-sky-800 transition-colors py-1.5 px-4 rounded-full border border-sky-200/80 bg-white/70 shadow-sm"
+          className="text-xs font-medium text-[#94a3b8] hover:text-[#5cc79a] transition-colors py-1.5 px-4 rounded-full border border-[#233a30] bg-[#16271f] shadow-sm cursor-pointer"
         >
           Tap to Open Immediately
         </button>

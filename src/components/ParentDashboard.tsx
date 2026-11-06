@@ -10,8 +10,12 @@ import {
   NoteItem,
   LearningVideoItem,
   StudyModePolicy,
+  ClassWatchStudent,
+  ClassWatchTimelineEvent,
+  ClassWatchAlert,
 } from '../types.ts';
 import { Logo } from './Logo.tsx';
+import { ParentClassWatchTimeline } from './ParentClassWatchTimeline.tsx';
 import {
   User,
   Users,
@@ -53,6 +57,12 @@ interface ParentDashboardProps {
   studyMinutes: number;
   onSubmitComplaint: (newComplaint: ComplaintItem) => void;
   onLogout: () => void;
+  // ClassWatch Integration Props
+  classWatchStudents?: ClassWatchStudent[];
+  classWatchTimeline?: ClassWatchTimelineEvent[];
+  classWatchAlerts?: ClassWatchAlert[];
+  onLinkChild?: (studentId: string, parentCode: string) => { success: boolean; message: string };
+  onUnlinkChild?: (studentRegNumber: string) => void;
 }
 
 export const ParentDashboard: React.FC<ParentDashboardProps> = ({
@@ -69,9 +79,15 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({
   studyMinutes,
   onSubmitComplaint,
   onLogout,
+  classWatchStudents = [],
+  classWatchTimeline = [],
+  classWatchAlerts = [],
+  onLinkChild = () => ({ success: true, message: 'Linked' }),
+  onUnlinkChild = () => {},
 }) => {
   type ParentTab =
     | 'overview'
+    | 'classwatch'
     | 'attendance'
     | 'assignments'
     | 'resources'
@@ -184,6 +200,18 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({
               Overview
             </button>
             <button
+              onClick={() => setActiveTab('classwatch')}
+              className={`px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer font-bold ${
+                activeTab === 'classwatch'
+                  ? 'bg-[#16271f] text-[#5cc79a] border border-[#233a30] shadow-sm'
+                  : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 text-emerald-600" />
+              <span>ClassWatch Live</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            </button>
+            <button
               onClick={() => setActiveTab('attendance')}
               className={`px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'attendance'
@@ -273,6 +301,7 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({
           {(
             [
               'overview',
+              'classwatch',
               'attendance',
               'assignments',
               'resources',
@@ -286,11 +315,13 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({
               onClick={() => setActiveTab(tab)}
               className={`px-2.5 py-1 rounded-lg shrink-0 capitalize cursor-pointer ${
                 activeTab === tab
-                  ? 'bg-sky-600 text-white font-semibold'
+                  ? tab === 'classwatch'
+                    ? 'bg-[#16271f] text-[#5cc79a] font-bold border border-[#233a30]'
+                    : 'bg-sky-600 text-white font-semibold'
                   : 'text-slate-600 bg-sky-50'
               }`}
             >
-              {tab === 'assignments' ? 'Assignments' : tab}
+              {tab === 'classwatch' ? 'ClassWatch' : tab === 'assignments' ? 'Assignments' : tab}
             </button>
           ))}
         </div>
@@ -318,6 +349,18 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({
               Read
             </button>
           </div>
+        )}
+
+        {/* TAB: CLASSWATCH LIVE TIMELINE */}
+        {activeTab === 'classwatch' && (
+          <ParentClassWatchTimeline
+            profile={profile}
+            students={classWatchStudents}
+            timeline={classWatchTimeline}
+            alerts={classWatchAlerts}
+            onLinkChild={onLinkChild}
+            onUnlinkChild={onUnlinkChild}
+          />
         )}
 
         {/* TAB 1: OVERVIEW */}

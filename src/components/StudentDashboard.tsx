@@ -12,10 +12,13 @@ import {
   SearchResultItem,
   ResourceRestrictionRule,
   AccessControlPolicyConfig,
+  ClassWatchClass,
+  ClassWatchStudent,
 } from '../types.ts';
 import { evaluateResourceAccess } from '../utils/accessControl.ts';
 import { RestrictedResourceModal } from './RestrictedResourceModal.tsx';
 import { WebsitePortalModal } from './WebsitePortalModal.tsx';
+import { StudentTabSimulator } from './StudentTabSimulator.tsx';
 import { Logo } from './Logo.tsx';
 import {
   BookOpen,
@@ -92,6 +95,16 @@ interface StudentDashboardProps {
   onSubmitAssignment: (assignmentId: string, text: string, fileName?: string) => void;
   onUpdateProfile: (updated: Partial<StudentProfile>) => void;
   onLogout: () => void;
+  // ClassWatch Integration Props
+  classWatchClasses?: ClassWatchClass[];
+  classWatchStudentState?: ClassWatchStudent;
+  soundEnabled?: boolean;
+  onJoinClassWatch?: (code: string) => { success: boolean; message: string };
+  onLeaveClassWatch?: () => void;
+  onReportDomain?: (domain: string) => void;
+  onRegenerateParentCode?: () => void;
+  onDismissWarning?: () => void;
+  onOpenExtensionModal?: () => void;
 }
 
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({
@@ -121,9 +134,19 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   onSubmitAssignment,
   onUpdateProfile,
   onLogout,
+  classWatchClasses = [],
+  classWatchStudentState,
+  soundEnabled = true,
+  onJoinClassWatch = () => ({ success: true, message: 'Joined' }),
+  onLeaveClassWatch = () => {},
+  onReportDomain = () => {},
+  onRegenerateParentCode = () => {},
+  onDismissWarning = () => {},
+  onOpenExtensionModal = () => {},
 }) => {
   type StudentTab =
     | 'overview'
+    | 'classwatch'
     | 'websites'
     | 'notes'
     | 'videos'
@@ -416,6 +439,20 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               Dashboard
             </button>
             <button
+              onClick={() => setActiveTab('classwatch')}
+              className={`px-3.5 py-1.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer font-bold ${
+                activeTab === 'classwatch'
+                  ? 'bg-[#16271f] text-[#5cc79a] border border-[#233a30] shadow-sm'
+                  : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 text-emerald-600" />
+              <span>ClassWatch Companion</span>
+              {classWatchStudentState && !classWatchStudentState.isRemoved && (
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              )}
+            </button>
+            <button
               onClick={() => setActiveTab('websites')}
               className={`px-3 py-1.5 rounded-xl transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'websites'
@@ -556,6 +593,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           {(
             [
               'overview',
+              'classwatch',
               'websites',
               'notes',
               'videos',
@@ -572,11 +610,19 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               onClick={() => setActiveTab(tab)}
               className={`px-2.5 py-1 rounded-lg shrink-0 capitalize cursor-pointer ${
                 activeTab === tab
-                  ? 'bg-sky-600 text-white font-semibold'
+                  ? tab === 'classwatch'
+                    ? 'bg-[#16271f] text-[#5cc79a] font-bold border border-[#233a30]'
+                    : 'bg-sky-600 text-white font-semibold'
                   : 'text-slate-600 bg-sky-50'
               }`}
             >
-              {tab === 'websites' ? 'Websites' : tab === 'activity' ? 'Activity' : tab}
+              {tab === 'classwatch'
+                ? 'ClassWatch'
+                : tab === 'websites'
+                ? 'Websites'
+                : tab === 'activity'
+                ? 'Activity'
+                : tab}
             </button>
           ))}
         </div>
@@ -648,6 +694,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               </button>
             </div>
           </div>
+        )}
+
+        {/* TAB: CLASSWATCH COMPANION & TAB SIMULATOR */}
+        {activeTab === 'classwatch' && (
+          <StudentTabSimulator
+            profile={profile}
+            classes={classWatchClasses}
+            currentStudentState={classWatchStudentState}
+            soundEnabled={soundEnabled}
+            onJoinClass={onJoinClassWatch}
+            onLeaveClass={onLeaveClassWatch}
+            onReportDomain={onReportDomain}
+            onRegenerateParentCode={onRegenerateParentCode}
+            onDismissWarning={onDismissWarning}
+          />
         )}
 
         {/* TAB 1: OVERVIEW */}

@@ -15,6 +15,13 @@ import {
   AttendanceRecord,
   StudentStudyActivityItem,
   StudyModePolicy,
+  ClassWatchClass,
+  ClassWatchStudent,
+  ClassWatchAlert,
+  ClassWatchTimelineEvent,
+  ClassWatchStudentStatus,
+  AppThemeId,
+  THEME_PRESETS,
 } from './types.ts';
 import {
   INITIAL_STUDENT,
@@ -33,6 +40,10 @@ import {
   INITIAL_COMPLAINTS,
   INITIAL_STUDY_POLICY,
   CURRICULUM_SEARCH_INDEX,
+  INITIAL_CLASSWATCH_CLASSES,
+  INITIAL_CLASSWATCH_STUDENTS,
+  INITIAL_CLASSWATCH_ALERTS,
+  INITIAL_CLASSWATCH_TIMELINE,
 } from './data/mockData.ts';
 import { SplashScreen } from './components/SplashScreen.tsx';
 import { MainRoleSelect } from './components/MainRoleSelect.tsx';
@@ -45,7 +56,21 @@ import { PDFReaderModal } from './components/PDFReaderModal.tsx';
 import { StudyModeModal } from './components/StudyModeModal.tsx';
 import { VideoPlayerModal } from './components/VideoPlayerModal.tsx';
 import { PaperSavedModal } from './components/PaperSavedModal.tsx';
-import { Smartphone, Monitor } from 'lucide-react';
+import { ChromeExtensionModal } from './components/ChromeExtensionModal.tsx';
+import { ThemeSelectorModal } from './components/ThemeSelectorModal.tsx';
+import {
+  isValidHostname,
+  normalizeDomain,
+  isDomainAllowed,
+  getDomainAlertSeverity,
+} from './utils/domainRules.ts';
+import {
+  playAlertChime,
+  playWarnTone,
+  playLockSound,
+  playSuccessChime,
+} from './utils/soundEffects.ts';
+import { Smartphone, Monitor, Shield, Palette, Sparkles } from 'lucide-react';
 
 export default function App() {
   // App Navigation Flow State
@@ -85,6 +110,22 @@ export default function App() {
   const [readingNote, setReadingNote] = useState<NoteItem | null>(null);
   const [watchingVideo, setWatchingVideo] = useState<LearningVideoItem | null>(null);
   const [showPaperSavedModal, setShowPaperSavedModal] = useState(false);
+
+  // ClassWatch Digital Classroom Monitoring Central State
+  const [classWatchClassesList, setClassWatchClassesList] = useState<ClassWatchClass[]>(INITIAL_CLASSWATCH_CLASSES);
+  const [activeClassWatchCode, setActiveClassWatchCode] = useState<string>('4892');
+  const [classWatchStudentsList, setClassWatchStudentsList] = useState<ClassWatchStudent[]>(INITIAL_CLASSWATCH_STUDENTS);
+  const [classWatchAlertsList, setClassWatchAlertsList] = useState<ClassWatchAlert[]>(INITIAL_CLASSWATCH_ALERTS);
+  const [classWatchTimelineList, setClassWatchTimelineList] = useState<ClassWatchTimelineEvent[]>(INITIAL_CLASSWATCH_TIMELINE);
+  const [classWatchSoundEnabled, setClassWatchSoundEnabled] = useState<boolean>(true);
+  const [showChromeExtensionModal, setShowChromeExtensionModal] = useState<boolean>(false);
+  const [activeTheme, setActiveTheme] = useState<AppThemeId>('classwatch-green');
+  const [showThemeModal, setShowThemeModal] = useState<boolean>(false);
+
+  // Synchronize active theme attribute on root element
+  React.useEffect(() => {
+    document.documentElement.setAttribute('data-theme', activeTheme);
+  }, [activeTheme]);
 
   // Handlers for Navigation & Login
   const handleSelectRole = (role: UserRole) => {
@@ -318,6 +359,387 @@ export default function App() {
     );
   };
 
+  // ==========================================
+  // ClassWatch Digital Classroom Monitoring Handlers
+  // ==========================================
+
+  const handleSelectClassWatch = (code: string) => {
+    setActiveClassWatchCode(code);
+  };
+
+  const handleCreateClassWatch = (name: string) => {
+    // Generate unique 4-digit numeric code
+    let newCode = String(Math.floor(1000 + Math.random() * 9000));
+    while (classWatchClassesList.some((c) => c.code === newCode)) {
+      newCode = String(Math.floor(1000 + Math.random() * 9000));
+    }
+
+    const teacher = getActiveTeacherProfile();
+    const newClass: ClassWatchClass = {
+      code: newCode,
+      name,
+      teacherId: teacher.id,
+      teacherName: teacher.name,
+      allowedDomains: ['wikipedia.org', 'khanacademy.org', 'ncert.nic.in', 'docs.google.com'],
+      createdAt: 'Today',
+    };
+
+    setClassWatchClassesList((prev) => [...prev, newClass]);
+    setActiveClassWatchCode(newCode);
+  };
+
+  const handleAddAllowedDomain = (domain: string) => {
+    const norm = normalizeDomain(domain);
+    if (!norm) return;
+
+    setClassWatchClassesList((prev) =>
+      prev.map((c) =>
+        c.code === activeClassWatchCode
+          ? { ...c, allowedDomains: [...c.allowedDomains, norm] }
+          : c
+      )
+    );
+
+    // Re-evaluate current students in that class: if their tab was off task on that domain, switch to On task
+    setClassWatchStudentsList((prev) =>
+      prev.map((s) => {
+        if (s.classCode === activeClassWatchCode && normalizeDomain(s.currentDomain) === norm && !s.isLocked) {
+          return { ...s, status: 'On task' };
+        }
+        return s;
+      })
+    );
+  };
+
+  const handleRemoveAllowedDomain = (domain: string) => {
+    setClassWatchClassesList((prev) =>
+      prev.map((c) =>
+        c.code === activeClassWatchCode
+          ? { ...c, allowedDomains: c.allowedDomains.filter((d) => d !== domain) }
+          : c
+      )
+    );
+  };
+
+  const handleReportDomain = (domain: string) => {
+    const activeStudent = getActiveStudentProfile();
+    const studentRegNumber = activeStudent.regNumber;
+    const normalized = normalizeDomain(domain);
+    const now = Date.now();
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    // Find student in classWatch roster
+    let student = classWatchStudentsList.find(
+      (s) => s.regNumber.toLowerCase() === studentRegNumber.toLowerCase()
+    );
+
+    // Auto-enroll student into active class if not already enrolled
+    if (!student) {
+      student = {
+        id: `cw-stu-${now}`,
+        regNumber: studentRegNumber,
+        name: activeStudent.name,
+        classCode: activeClassWatchCode,
+        currentDomain: domain,
+        status: 'On task',
+        lastSeen: 'Just now',
+        lastSeenTimestamp: now,
+        parentLinkCode: String(Math.floor(100000 + Math.random() * 900000)),
+        isLocked: false,
+        joinedAt: timeStr,
+      };
+      setClassWatchStudentsList((prev) => [...prev, student!]);
+    }
+
+    const studentClass = classWatchClassesList.find((c) => c.code === student!.classCode) || classWatchClassesList[0];
+    const allowed = studentClass ? isDomainAllowed(normalized, studentClass.allowedDomains) : true;
+    const valid = isValidHostname(domain);
+
+    let newStatus: ClassWatchStudentStatus = 'On task';
+    if (domain === 'Away' || normalized === 'away') {
+      newStatus = 'Away';
+    } else if (student.isLocked) {
+      newStatus = 'Locked';
+    } else if (!allowed && valid) {
+      newStatus = 'Off task';
+    }
+
+    // Update student state
+    setClassWatchStudentsList((prev) =>
+      prev.map((s) =>
+        s.regNumber.toLowerCase() === studentRegNumber.toLowerCase()
+          ? {
+              ...s,
+              currentDomain: domain,
+              status: newStatus,
+              lastSeen: 'Just now',
+              lastSeenTimestamp: now,
+            }
+          : s
+      )
+    );
+
+    // Add to parent-visible timeline (site names and time only - no full URLs!)
+    setClassWatchTimelineList((prev) => [
+      {
+        id: `cw-tl-${now}-${Math.floor(Math.random() * 1000)}`,
+        studentRegNumber,
+        studentName: activeStudent.name,
+        domain: normalized || domain,
+        status: newStatus === 'Away' ? 'Away' : newStatus === 'Locked' ? 'Locked' : allowed ? 'On task' : 'Off task',
+        timestamp: timeStr,
+        date: 'Today',
+        classCode: student!.classCode,
+      },
+      ...prev.slice(0, 99),
+    ]);
+
+    // Check alert generation with 60s repeat deduplication
+    if (!allowed && valid) {
+      const { severity, reason } = getDomainAlertSeverity(domain);
+
+      if (classWatchSoundEnabled) {
+        playAlertChime();
+      }
+
+      setClassWatchAlertsList((prevAlerts) => {
+        const existingIdx = prevAlerts.findIndex(
+          (a) =>
+            a.studentRegNumber.toLowerCase() === studentRegNumber.toLowerCase() &&
+            normalizeDomain(a.domain) === normalized &&
+            now - a.lastTimestamp <= 60000 &&
+            a.status === 'active'
+        );
+
+        if (existingIdx !== -1) {
+          const updated = [...prevAlerts];
+          updated[existingIdx] = {
+            ...updated[existingIdx],
+            count: updated[existingIdx].count + 1,
+            lastTimestamp: now,
+            timestamp: timeStr,
+            severity,
+          };
+          return updated;
+        }
+
+        const newAlert: ClassWatchAlert = {
+          id: `alert-${now}-${Math.floor(Math.random() * 1000)}`,
+          studentId: student!.id,
+          studentName: student!.name,
+          studentRegNumber: student!.regNumber,
+          domain: normalized,
+          severity,
+          reason,
+          count: 1,
+          timestamp: timeStr,
+          lastTimestamp: now,
+          status: 'active',
+          classCode: student!.classCode,
+        };
+
+        return [newAlert, ...prevAlerts];
+      });
+    }
+  };
+
+  const handleToggleLockStudent = (studentId: string) => {
+    setClassWatchStudentsList((prev) =>
+      prev.map((s) => {
+        if (s.id === studentId) {
+          const nextLocked = !s.isLocked;
+          return {
+            ...s,
+            isLocked: nextLocked,
+            status: nextLocked ? 'Locked' : 'On task',
+          };
+        }
+        return s;
+      })
+    );
+  };
+
+  const handleWarnStudent = (studentId: string, customMessage?: string) => {
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setClassWatchStudentsList((prev) =>
+      prev.map((s) => {
+        if (s.id === studentId) {
+          return {
+            ...s,
+            warningMessage: customMessage || 'Please close non-academic tabs and return to the lesson material.',
+            warningTimestamp: timeStr,
+          };
+        }
+        return s;
+      })
+    );
+  };
+
+  const handleDismissWarning = () => {
+    const activeStudent = getActiveStudentProfile();
+    setClassWatchStudentsList((prev) =>
+      prev.map((s) =>
+        s.regNumber.toLowerCase() === activeStudent.regNumber.toLowerCase()
+          ? { ...s, warningMessage: undefined, warningTimestamp: undefined }
+          : s
+      )
+    );
+  };
+
+  const handleJoinClassWatch = (classCode: string): { success: boolean; message: string } => {
+    const targetClass = classWatchClassesList.find((c) => c.code === classCode);
+    if (!targetClass) {
+      return { success: false, message: `No classroom found with code "${classCode}". Please check with your instructor.` };
+    }
+
+    const activeStudent = getActiveStudentProfile();
+    const existing = classWatchStudentsList.find(
+      (s) => s.regNumber.toLowerCase() === activeStudent.regNumber.toLowerCase()
+    );
+
+    if (existing?.isRemoved && existing.classCode === classCode) {
+      return {
+        success: false,
+        message: 'You were removed from this classroom by the teacher. Please ask your teacher to allow you to rejoin.',
+      };
+    }
+
+    const now = Date.now();
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    if (existing) {
+      setClassWatchStudentsList((prev) =>
+        prev.map((s) =>
+          s.regNumber.toLowerCase() === activeStudent.regNumber.toLowerCase()
+            ? {
+                ...s,
+                classCode,
+                isRemoved: false,
+                status: 'On task',
+                lastSeen: 'Just now',
+                lastSeenTimestamp: now,
+              }
+            : s
+        )
+      );
+    } else {
+      const newStu: ClassWatchStudent = {
+        id: `cw-stu-${now}`,
+        regNumber: activeStudent.regNumber,
+        name: activeStudent.name,
+        classCode,
+        currentDomain: 'wikipedia.org',
+        status: 'On task',
+        lastSeen: 'Just now',
+        lastSeenTimestamp: now,
+        parentLinkCode: String(Math.floor(100000 + Math.random() * 900000)),
+        isLocked: false,
+        joinedAt: timeStr,
+      };
+      setClassWatchStudentsList((prev) => [...prev, newStu]);
+    }
+
+    return { success: true, message: `Successfully joined ${targetClass.name}!` };
+  };
+
+  const handleLeaveClassWatch = () => {
+    const activeStudent = getActiveStudentProfile();
+    setClassWatchStudentsList((prev) =>
+      prev.map((s) =>
+        s.regNumber.toLowerCase() === activeStudent.regNumber.toLowerCase()
+          ? { ...s, status: 'Offline', isRemoved: true }
+          : s
+      )
+    );
+  };
+
+  const handleRemoveClassWatchStudent = (studentId: string) => {
+    setClassWatchStudentsList((prev) =>
+      prev.map((s) =>
+        s.id === studentId
+          ? { ...s, isRemoved: true, status: 'Offline' }
+          : s
+      )
+    );
+  };
+
+  const handleResetStudentPassword = (studentRegNumber: string, newPass: string) => {
+    setAccountsList((prev) =>
+      prev.map((acc) =>
+        acc.identifier.toLowerCase() === studentRegNumber.toLowerCase()
+          ? { ...acc, password: newPass }
+          : acc
+      )
+    );
+  };
+
+  const handleRegenerateParentCode = () => {
+    const activeStudent = getActiveStudentProfile();
+    const newCode = String(Math.floor(100000 + Math.random() * 900000));
+    setClassWatchStudentsList((prev) =>
+      prev.map((s) =>
+        s.regNumber.toLowerCase() === activeStudent.regNumber.toLowerCase()
+          ? { ...s, parentLinkCode: newCode }
+          : s
+      )
+    );
+  };
+
+  const handleLinkChild = (studentId: string, parentCode: string): { success: boolean; message: string } => {
+    const student = classWatchStudentsList.find(
+      (s) => s.regNumber.toLowerCase() === studentId.toLowerCase()
+    );
+
+    if (!student) {
+      return { success: false, message: `No student found with ID "${studentId}".` };
+    }
+
+    if (student.parentLinkCode !== parentCode) {
+      return { success: false, message: 'Invalid 6-digit parent code. Please check with your student.' };
+    }
+
+    if (currentAccount && currentAccount.role === 'parent') {
+      const updatedAccount: UserAccount = {
+        ...currentAccount,
+        parentData: {
+          relationship: currentAccount.parentData?.relationship || 'Parent',
+          linkedStudentRegNumber: student.regNumber,
+          linkedStudentName: student.name,
+        },
+      };
+      handleUpdateAccount(updatedAccount);
+    }
+
+    return { success: true, message: `Successfully linked ${student.name}!` };
+  };
+
+  const handleUnlinkChild = (studentRegNumber: string) => {
+    if (currentAccount && currentAccount.role === 'parent') {
+      const updatedAccount: UserAccount = {
+        ...currentAccount,
+        parentData: {
+          relationship: currentAccount.parentData?.relationship || 'Parent',
+          linkedStudentRegNumber: '',
+          linkedStudentName: 'None',
+        },
+      };
+      handleUpdateAccount(updatedAccount);
+    }
+  };
+
+  const handleDismissAlert = (alertId: string) => {
+    setClassWatchAlertsList((prev) =>
+      prev.map((a) => (a.id === alertId ? { ...a, status: 'dismissed' } : a))
+    );
+  };
+
+  const handleClearAlerts = () => {
+    setClassWatchAlertsList((prev) =>
+      prev.map((a) => (a.classCode === activeClassWatchCode ? { ...a, status: 'dismissed' } : a))
+    );
+  };
+
+
   // Study Mode session end
   const handleDeactivateStudyMode = (minutesRecorded: number) => {
     setIsStudyModeActive(false);
@@ -427,6 +849,7 @@ export default function App() {
           accounts={accountsList}
           onBack={() => setAppStage('role_select')}
           onLoginSuccess={handleLoginSuccess}
+          onRegisterAccount={handleCreateAccount}
         />
       );
     }
@@ -498,6 +921,17 @@ export default function App() {
           onSubmitAssignment={handleSubmitAssignment}
           onUpdateProfile={handleUpdateStudentProfile}
           onLogout={handleLogout}
+          classWatchClasses={classWatchClassesList}
+          classWatchStudentState={classWatchStudentsList.find(
+            (s) => s.regNumber.toLowerCase() === getActiveStudentProfile().regNumber.toLowerCase()
+          )}
+          soundEnabled={classWatchSoundEnabled}
+          onJoinClassWatch={handleJoinClassWatch}
+          onLeaveClassWatch={handleLeaveClassWatch}
+          onReportDomain={handleReportDomain}
+          onRegenerateParentCode={handleRegenerateParentCode}
+          onDismissWarning={handleDismissWarning}
+          onOpenExtensionModal={() => setShowChromeExtensionModal(true)}
         />
       );
     }
@@ -529,6 +963,23 @@ export default function App() {
           onUpdateComplaint={handleUpdateComplaint}
           onUpdatePolicy={(p) => setStudyPolicy(p)}
           onLogout={handleLogout}
+          classWatchClasses={classWatchClassesList}
+          activeClassWatchCode={activeClassWatchCode}
+          classWatchStudents={classWatchStudentsList}
+          classWatchAlerts={classWatchAlertsList}
+          soundEnabled={classWatchSoundEnabled}
+          onToggleSound={() => setClassWatchSoundEnabled((prev) => !prev)}
+          onSelectClassWatch={handleSelectClassWatch}
+          onCreateClassWatch={handleCreateClassWatch}
+          onAddAllowedDomain={handleAddAllowedDomain}
+          onRemoveAllowedDomain={handleRemoveAllowedDomain}
+          onWarnStudent={handleWarnStudent}
+          onToggleLockStudent={handleToggleLockStudent}
+          onResetStudentPassword={handleResetStudentPassword}
+          onRemoveClassWatchStudent={handleRemoveClassWatchStudent}
+          onDismissAlert={handleDismissAlert}
+          onClearAlerts={handleClearAlerts}
+          onOpenExtensionModal={() => setShowChromeExtensionModal(true)}
         />
       );
     }
@@ -549,6 +1000,11 @@ export default function App() {
           studyMinutes={studyMinutesCount}
           onSubmitComplaint={(cmp) => setComplaintsList((prev) => [cmp, ...prev])}
           onLogout={handleLogout}
+          classWatchStudents={classWatchStudentsList}
+          classWatchTimeline={classWatchTimelineList}
+          classWatchAlerts={classWatchAlertsList}
+          onLinkChild={handleLinkChild}
+          onUnlinkChild={handleUnlinkChild}
         />
       );
     }
@@ -585,6 +1041,9 @@ export default function App() {
           onUpdatePolicy={(p) => setStudyPolicy(p)}
           onResolveComplaint={(id, res) => handleUpdateComplaint(id, 'Resolved', res)}
           onLogout={handleLogout}
+          classWatchClasses={classWatchClassesList}
+          classWatchStudents={classWatchStudentsList}
+          classWatchAlerts={classWatchAlertsList}
         />
       );
     }
@@ -592,40 +1051,136 @@ export default function App() {
     return null;
   };
 
+  const currentPreset = THEME_PRESETS.find((t) => t.id === activeTheme) || THEME_PRESETS[0];
+
+  const handleCycleTheme = () => {
+    const currentIndex = THEME_PRESETS.findIndex((t) => t.id === activeTheme);
+    const nextIndex = (currentIndex + 1) % THEME_PRESETS.length;
+    setActiveTheme(THEME_PRESETS[nextIndex].id);
+  };
+
   return (
-    <div className="min-h-screen bg-sky-50 text-slate-900 flex flex-col font-sans">
-      {/* Viewport Preview Control Bar */}
-      <div className="bg-sky-950 text-sky-200 text-xs px-4 py-1.5 flex items-center justify-between z-40 select-none">
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-white tracking-wide">StudyOn Prototype</span>
-          <span className="text-[10px] text-sky-400 bg-sky-900/60 px-1.5 py-0.5 rounded">
-            Student Educator v2.0 · Comprehensive Academic Platform
+    <div
+      className="min-h-screen flex flex-col font-sans transition-colors"
+      style={{
+        backgroundColor: 'var(--theme-bg-main)',
+        color: 'var(--theme-text-main)',
+      }}
+    >
+      {/* Viewport Preview & ClassWatch Green Theme Control Bar */}
+      <div
+        className="text-xs px-4 py-2 flex flex-wrap items-center justify-between gap-2 z-40 select-none border-b transition-colors"
+        style={{
+          backgroundColor: 'var(--theme-card-bg)',
+          color: 'var(--theme-text-muted)',
+          borderColor: 'var(--theme-border)',
+        }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 font-bold text-white tracking-wide">
+            <Shield className="w-4 h-4 text-[var(--theme-accent)]" />
+            <span>StudyOn + ClassWatch Suite</span>
+          </div>
+          <span
+            className="hidden sm:inline-block text-[10px] px-2.5 py-0.5 rounded-full font-semibold border"
+            style={{
+              backgroundColor: 'var(--theme-tag-bg)',
+              color: 'var(--theme-accent)',
+              borderColor: 'var(--theme-border-strong)',
+            }}
+          >
+            Digital Classroom Monitoring & Academic Portal
           </span>
         </div>
 
-        <div className="flex items-center gap-1 bg-sky-900/80 p-0.5 rounded-lg border border-sky-800">
+        <div className="flex items-center gap-2">
+          {/* Chrome Extension Modal Trigger */}
           <button
-            onClick={() => setDevicePreview('desktop')}
-            className={`px-2.5 py-1 rounded text-[11px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
-              devicePreview === 'desktop'
-                ? 'bg-sky-500 text-white shadow-2xs'
-                : 'text-sky-300 hover:text-white'
-            }`}
+            onClick={() => setShowChromeExtensionModal(true)}
+            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors border"
+            style={{
+              backgroundColor: 'var(--theme-card-elevated)',
+              color: 'var(--theme-accent)',
+              borderColor: 'var(--theme-border-strong)',
+            }}
           >
-            <Monitor className="w-3 h-3" />
-            <span className="hidden sm:inline">Desktop Preview</span>
+            Extension V3
           </button>
+
+          {/* Theme Gallery & Selector Trigger */}
           <button
-            onClick={() => setDevicePreview('mobile')}
-            className={`px-2.5 py-1 rounded text-[11px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
-              devicePreview === 'mobile'
-                ? 'bg-sky-500 text-white shadow-2xs'
-                : 'text-sky-300 hover:text-white'
-            }`}
+            onClick={() => setShowThemeModal(true)}
+            className="px-2.5 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
+            style={{
+              backgroundColor: 'var(--theme-card-elevated)',
+              borderColor: 'var(--theme-border-strong)',
+              color: 'var(--theme-text-main)',
+            }}
+            title="Open Green Theme Gallery"
           >
-            <Smartphone className="w-3 h-3" />
-            <span>Android Frame</span>
+            <span
+              className="w-2.5 h-2.5 rounded-full shadow-xs shrink-0"
+              style={{ backgroundColor: currentPreset.accentHex }}
+            />
+            <Palette className="w-3.5 h-3.5 text-[var(--theme-accent)] shrink-0" />
+            <span className="hidden sm:inline font-bold">{currentPreset.name}</span>
+            <span
+              className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ml-1"
+              style={{
+                backgroundColor: 'var(--theme-tag-bg)',
+                color: 'var(--theme-accent)',
+              }}
+            >
+              Gallery
+            </span>
           </button>
+
+          {/* Quick Next Theme Cycle Button */}
+          <button
+            onClick={handleCycleTheme}
+            className="px-2 py-1 rounded-lg border text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+            style={{
+              backgroundColor: 'var(--theme-card-hover)',
+              borderColor: 'var(--theme-border)',
+              color: 'var(--theme-accent)',
+            }}
+            title="Cycle next green theme"
+          >
+            <Sparkles className="w-3 h-3 shrink-0" />
+            <span className="hidden md:inline">Cycle Theme</span>
+          </button>
+
+          {/* Device Preview Toggle */}
+          <div
+            className="flex items-center gap-0.5 p-0.5 rounded-lg border"
+            style={{
+              backgroundColor: 'var(--theme-bg-main)',
+              borderColor: 'var(--theme-border)',
+            }}
+          >
+            <button
+              onClick={() => setDevicePreview('desktop')}
+              className={`px-2.5 py-1 rounded text-[11px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                devicePreview === 'desktop'
+                  ? 'bg-[var(--theme-accent)] text-[var(--theme-bg-main)] font-bold shadow-2xs'
+                  : 'text-[#94a3b8] hover:text-white'
+              }`}
+            >
+              <Monitor className="w-3 h-3" />
+              <span className="hidden sm:inline">Desktop</span>
+            </button>
+            <button
+              onClick={() => setDevicePreview('mobile')}
+              className={`px-2.5 py-1 rounded text-[11px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                devicePreview === 'mobile'
+                  ? 'bg-[var(--theme-accent)] text-[var(--theme-bg-main)] font-bold shadow-2xs'
+                  : 'text-[#94a3b8] hover:text-white'
+              }`}
+            >
+              <Smartphone className="w-3 h-3" />
+              <span>Android</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -634,7 +1189,10 @@ export default function App() {
         {devicePreview === 'desktop' ? (
           <div className="w-full min-h-full">{renderCurrentView()}</div>
         ) : (
-          <div className="py-6 px-2 flex justify-center w-full bg-slate-900/90 min-h-screen">
+          <div
+            className="py-6 px-2 flex justify-center w-full min-h-screen"
+            style={{ backgroundColor: 'rgba(0, 0, 0, 0.45)' }}
+          >
             {/* Sleek Android Device Bezel */}
             <div className="w-full max-w-[420px] bg-slate-950 rounded-[44px] p-3 shadow-2xl border-4 border-slate-700/80 flex flex-col h-[860px] my-auto overflow-hidden relative">
               {/* Android Top Camera Punch Hole & Status Bar */}
@@ -648,7 +1206,10 @@ export default function App() {
               </div>
 
               {/* Android Screen Body */}
-              <div className="flex-1 bg-sky-50 overflow-y-auto rounded-3xl relative">
+              <div
+                className="flex-1 overflow-y-auto rounded-3xl relative"
+                style={{ backgroundColor: 'var(--theme-bg-main)' }}
+              >
                 {renderCurrentView()}
               </div>
 
@@ -703,6 +1264,22 @@ export default function App() {
           studyMinutesCount={studyMinutesCount}
         />
       )}
+
+      {/* 5. Chrome Extension Manifest V3 Hub */}
+      {showChromeExtensionModal && (
+        <ChromeExtensionModal
+          isOpen={showChromeExtensionModal}
+          onClose={() => setShowChromeExtensionModal(false)}
+        />
+      )}
+
+      {/* 6. Green Theme Gallery Modal */}
+      <ThemeSelectorModal
+        isOpen={showThemeModal}
+        activeTheme={activeTheme}
+        onSelectTheme={(themeId) => setActiveTheme(themeId)}
+        onClose={() => setShowThemeModal(false)}
+      />
     </div>
   );
 }

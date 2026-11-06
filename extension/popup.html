@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ClassWatch Extension</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { width: 320px; background: #0f1c18; color: #e2e8f0; padding: 16px; font-size: 13px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; border-bottom: 1px solid #233a30; padding-bottom: 10px; }
+    .brand { font-size: 15px; font-weight: 700; color: #5cc79a; display: flex; align-items: center; gap: 6px; }
+    .status-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #1a3328; color: #5cc79a; font-weight: 600; }
+    .field { margin-bottom: 10px; }
+    label { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    input { width: 100%; padding: 8px 10px; background: #16271f; border: 1px solid #2a473b; border-radius: 6px; color: #fff; font-size: 13px; }
+    input:focus { outline: none; border-color: #5cc79a; }
+    button { width: 100%; padding: 9px; background: #5cc79a; color: #0b1411; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    button:hover { background: #6fe0b0; }
+    .disconnect-btn { background: #ef4444; color: #fff; margin-top: 8px; }
+    .disconnect-btn:hover { background: #dc2626; }
+    .info-box { background: #16271f; border: 1px solid #233a30; border-radius: 6px; padding: 10px; margin-top: 10px; }
+    .info-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .info-row:last-child { margin-bottom: 0; }
+    .info-label { color: #94a3b8; }
+    .info-value { color: #fff; font-weight: 500; }
+    .privacy { margin-top: 12px; font-size: 10px; color: #64748b; line-height: 1.4; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand">
+      <span>🛡️</span> ClassWatch
+    </div>
+    <span id="connStatus" class="status-badge">Offline</span>
+  </div>
+
+  <div id="loginSection">
+    <div class="field">
+      <label>Server Address</label>
+      <input type="text" id="serverUrl" value="http://localhost:3000" placeholder="http://localhost:3000" />
+    </div>
+    <div class="field">
+      <label>Student ID (e.g. STU-2026-4401)</label>
+      <input type="text" id="studentId" placeholder="Your student ID" />
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="Password" />
+    </div>
+    <div class="field">
+      <label>Class Code (4 Digits)</label>
+      <input type="text" id="classCode" maxlength="4" placeholder="e.g. 4892" />
+    </div>
+    <button id="connectBtn">Connect to Class</button>
+  </div>
+
+  <div id="activeSection" style="display: none;">
+    <div class="info-box">
+      <div class="info-row">
+        <span class="info-label">Student</span>
+        <span class="info-value" id="dispStudentName">Aarav Verma</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Class Code</span>
+        <span class="info-value" id="dispClassCode">4892</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Active Hostname</span>
+        <span class="info-value" id="dispActiveDomain" style="color: #5cc79a;">wikipedia.org</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Status</span>
+        <span class="info-value" id="dispStatus" style="color: #5cc79a;">On task</span>
+      </div>
+    </div>
+    <button id="disconnectBtn" class="disconnect-btn">Disconnect</button>
+  </div>
+
+  <div class="privacy">
+    🔒 Privacy guarantee: Site names only. Never full URLs, search queries, page text, keystrokes, or webcam.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

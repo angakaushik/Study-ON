@@ -15,6 +15,10 @@ import {
   AttendanceRecord,
   CollegeClass,
   StudentStudyActivityItem,
+  ClassWatchClass,
+  ClassWatchStudent,
+  ClassWatchAlert,
+  ClassWatchTimelineEvent,
 } from '../types.ts';
 
 export const INITIAL_STUDENT: StudentProfile = {
@@ -947,6 +951,164 @@ export const INITIAL_STUDY_ACTIVITIES: StudentStudyActivityItem[] = [
     durationMinutes: 48,
     timestamp: 'Yesterday, 07:10 PM',
     details: 'Streamed complete MIT YouTube lecture.',
+  },
+];
+
+// ==========================================
+// ClassWatch Digital Classroom Monitoring Initial Data
+// ==========================================
+
+export const DEFAULT_STUDY_ALLOWLIST = [
+  'wikipedia.org',
+  'khanacademy.org',
+  'ncert.nic.in',
+  'docs.google.com',
+];
+
+export const INITIAL_CLASSWATCH_CLASSES: ClassWatchClass[] = [
+  {
+    code: '4892',
+    name: 'CS302 - Data Structures & Algorithms Lab',
+    teacherId: 'acc-tch-01',
+    teacherName: 'Dr. Ananya Sharma',
+    allowedDomains: ['wikipedia.org', 'khanacademy.org', 'ncert.nic.in', 'docs.google.com'],
+    createdAt: 'Oct 20, 2026',
+  },
+  {
+    code: '2045',
+    name: 'CS304 - Computer Networks & Protocols Lab',
+    teacherId: 'acc-tch-02',
+    teacherName: 'Prof. Rajesh Kulkarni',
+    allowedDomains: ['wikipedia.org', 'khanacademy.org', 'ncert.nic.in', 'docs.google.com'],
+    createdAt: 'Oct 19, 2026',
+  },
+];
+
+export const INITIAL_CLASSWATCH_STUDENTS: ClassWatchStudent[] = [
+  {
+    id: 'cw-stu-01',
+    regNumber: 'STU-2026-4401',
+    name: 'Aarav Verma',
+    classCode: '4892',
+    currentDomain: 'wikipedia.org',
+    status: 'On task',
+    lastSeen: 'Just now',
+    lastSeenTimestamp: Date.now() - 2000,
+    parentLinkCode: '842109',
+    isLocked: false,
+    joinedAt: '10:02 AM',
+  },
+  {
+    id: 'cw-stu-02',
+    regNumber: 'STU-2026-4402',
+    name: 'Pooja Nair',
+    classCode: '4892',
+    currentDomain: 'docs.google.com',
+    status: 'On task',
+    lastSeen: '15s ago',
+    lastSeenTimestamp: Date.now() - 15000,
+    parentLinkCode: '629143',
+    isLocked: false,
+    joinedAt: '10:04 AM',
+  },
+  {
+    id: 'cw-stu-03',
+    regNumber: 'STU-2026-4403',
+    name: 'Rohan Mehra',
+    classCode: '4892',
+    currentDomain: 'youtube.com',
+    status: 'Off task',
+    lastSeen: 'Just now',
+    lastSeenTimestamp: Date.now() - 1000,
+    parentLinkCode: '481920',
+    isLocked: false,
+    joinedAt: '10:06 AM',
+  },
+  {
+    id: 'cw-stu-04',
+    regNumber: 'STU-2026-4404',
+    name: 'Siddharth Rao',
+    classCode: '4892',
+    currentDomain: 'Away',
+    status: 'Away',
+    lastSeen: '2m ago',
+    lastSeenTimestamp: Date.now() - 120000,
+    parentLinkCode: '550182',
+    isLocked: false,
+    joinedAt: '10:07 AM',
+  },
+  {
+    id: 'cw-stu-05',
+    regNumber: 'STU-2026-4405',
+    name: 'Tanvi Deshmukh',
+    classCode: '4892',
+    currentDomain: 'ncert.nic.in',
+    status: 'On task',
+    lastSeen: '40s ago',
+    lastSeenTimestamp: Date.now() - 40000,
+    parentLinkCode: '339174',
+    isLocked: false,
+    joinedAt: '10:08 AM',
+  },
+];
+
+export const INITIAL_CLASSWATCH_ALERTS: ClassWatchAlert[] = [
+  {
+    id: 'alert-01',
+    studentId: 'cw-stu-03',
+    studentName: 'Rohan Mehra',
+    studentRegNumber: 'STU-2026-4403',
+    domain: 'youtube.com',
+    severity: 'HIGH',
+    reason: 'Social media, video streaming, chat, or gaming site',
+    count: 2,
+    timestamp: '10:14 AM',
+    lastTimestamp: Date.now() - 30000,
+    status: 'active',
+    classCode: '4892',
+  },
+];
+
+export const INITIAL_CLASSWATCH_TIMELINE: ClassWatchTimelineEvent[] = [
+  {
+    id: 'cw-tl-01',
+    studentRegNumber: 'STU-2026-4401',
+    studentName: 'Aarav Verma',
+    domain: 'wikipedia.org',
+    status: 'On task',
+    timestamp: '10:22 AM',
+    date: 'Today',
+    classCode: '4892',
+  },
+  {
+    id: 'cw-tl-02',
+    studentRegNumber: 'STU-2026-4401',
+    studentName: 'Aarav Verma',
+    domain: 'docs.google.com',
+    status: 'On task',
+    timestamp: '10:11 AM',
+    date: 'Today',
+    classCode: '4892',
+  },
+  {
+    id: 'cw-tl-03',
+    studentRegNumber: 'STU-2026-4401',
+    studentName: 'Aarav Verma',
+    domain: 'khanacademy.org',
+    status: 'On task',
+    timestamp: '09:45 AM',
+    date: 'Today',
+    classCode: '4892',
+  },
+  {
+    id: 'cw-tl-04',
+    studentRegNumber: 'STU-2026-4401',
+    studentName: 'Aarav Verma',
+    domain: 'ncert.nic.in',
+    status: 'On task',
+    timestamp: '09:15 AM',
+    date: 'Today',
+    classCode: '4892',
   },
 ];
 

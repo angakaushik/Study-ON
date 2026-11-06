@@ -12,6 +12,9 @@ import {
   AttendanceRecord,
   StudentStudyActivityItem,
   StudyModePolicy,
+  ClassWatchClass,
+  ClassWatchStudent,
+  ClassWatchAlert,
 } from '../types.ts';
 import { Logo } from './Logo.tsx';
 import {
@@ -87,6 +90,10 @@ interface PrincipalDashboardProps {
   onUpdatePolicy: (updatedPolicy: StudyModePolicy) => void;
   onResolveComplaint: (complaintId: string, resolution: string) => void;
   onLogout: () => void;
+  // ClassWatch Integration Props
+  classWatchClasses?: ClassWatchClass[];
+  classWatchStudents?: ClassWatchStudent[];
+  classWatchAlerts?: ClassWatchAlert[];
 }
 
 export const PrincipalDashboard: React.FC<PrincipalDashboardProps> = ({
@@ -119,6 +126,9 @@ export const PrincipalDashboard: React.FC<PrincipalDashboardProps> = ({
   onUpdatePolicy,
   onResolveComplaint,
   onLogout,
+  classWatchClasses = [],
+  classWatchStudents = [],
+  classWatchAlerts = [],
 }) => {
   type PrincipalTab =
     | 'overview'
@@ -713,6 +723,73 @@ export const PrincipalDashboard: React.FC<PrincipalDashboardProps> = ({
                 <div className="text-[10px] font-bold text-sky-700 uppercase">College Attendance Rate</div>
                 <div className="text-2xl font-black text-sky-900 mt-1">{avgAttendance}%</div>
                 <div className="text-xs text-slate-500 mt-0.5">Institution-wide average</div>
+              </div>
+            </div>
+
+            {/* ClassWatch Institutional Monitoring Overview Card */}
+            <div className="bg-[#16271f] border border-[#233a30] rounded-3xl p-6 text-white shadow-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#233a30]">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-[#1f3d30] border border-[#5cc79a]/40 flex items-center justify-center text-[#5cc79a]">
+                    <Shield className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-bold text-white">ClassWatch Live Classroom Telemetry</h3>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#1a3a2e] text-[#5cc79a] border border-[#5cc79a]/30">
+                        INSTITUTION-WIDE
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#94a3b8]">
+                      Monitoring active classroom tabs, allowable site compliance, and real-time screen locks.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-[#94a3b8]">
+                    {classWatchClasses.length} Monitored Classrooms
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
+                <div className="bg-[#0f1c18] border border-[#233a30] rounded-2xl p-4">
+                  <div className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider">Connected Students</div>
+                  <div className="text-2xl font-black text-[#5cc79a] mt-1">{classWatchStudents.length} Online</div>
+                  <div className="text-[11px] text-[#64748b] mt-0.5">Across active labs</div>
+                </div>
+
+                <div className="bg-[#0f1c18] border border-[#233a30] rounded-2xl p-4">
+                  <div className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider">On-Task Compliance</div>
+                  <div className="text-2xl font-black text-emerald-400 mt-1">
+                    {classWatchStudents.length > 0
+                      ? Math.round(
+                          (classWatchStudents.filter((s) => s.status === 'On task').length /
+                            classWatchStudents.length) *
+                            100
+                        )
+                      : 100}
+                    %
+                  </div>
+                  <div className="text-[11px] text-[#64748b] mt-0.5">Approved study sites</div>
+                </div>
+
+                <div className="bg-[#0f1c18] border border-[#233a30] rounded-2xl p-4">
+                  <div className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider">High Alerts Today</div>
+                  <div className="text-2xl font-black text-rose-400 mt-1">
+                    {classWatchAlerts.filter((a) => a.severity === 'HIGH').length}
+                  </div>
+                  <div className="text-[11px] text-[#64748b] mt-0.5">Social/video/games</div>
+                </div>
+
+                <div className="bg-[#0f1c18] border border-[#233a30] rounded-2xl p-4">
+                  <div className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider">Active Screen Locks</div>
+                  <div className="text-2xl font-black text-purple-400 mt-1">
+                    {classWatchStudents.filter((s) => s.isLocked).length}
+                  </div>
+                  <div className="text-[11px] text-[#64748b] mt-0.5">Teacher paused screens</div>
+                </div>
               </div>
             </div>
 

@@ -1,10 +1,113 @@
 @import "tailwindcss";
 
+:root,
+[data-theme="classwatch-green"] {
+  --theme-bg-main: #0f1c18;
+  --theme-card-bg: #16271f;
+  --theme-card-elevated: #1c352a;
+  --theme-card-hover: #224234;
+  --theme-accent: #5cc79a;
+  --theme-accent-hover: #6ee7b7;
+  --theme-accent-subtle: rgba(92, 199, 154, 0.15);
+  --theme-accent-glow: rgba(92, 199, 154, 0.3);
+  --theme-border: #233a30;
+  --theme-border-strong: #335948;
+  --theme-text-main: #f0fdf4;
+  --theme-text-muted: #94a3b8;
+  --theme-text-subtle: #64748b;
+  --theme-tag-bg: #1a3629;
+}
+
+[data-theme="pure-green"] {
+  --theme-bg-main: #061209;
+  --theme-card-bg: #0d2012;
+  --theme-card-elevated: #132e1a;
+  --theme-card-hover: #193c22;
+  --theme-accent: #22c55e;
+  --theme-accent-hover: #4ade80;
+  --theme-accent-subtle: rgba(34, 197, 94, 0.18);
+  --theme-accent-glow: rgba(34, 197, 94, 0.35);
+  --theme-border: #163b26;
+  --theme-border-strong: #215938;
+  --theme-text-main: #dcfce7;
+  --theme-text-muted: #86efac;
+  --theme-text-subtle: #4ade80aa;
+  --theme-tag-bg: #11331c;
+}
+
+[data-theme="cyber-mint"] {
+  --theme-bg-main: #041009;
+  --theme-card-bg: #0a2215;
+  --theme-card-elevated: #103320;
+  --theme-card-hover: #16462c;
+  --theme-accent: #00ff88;
+  --theme-accent-hover: #55ffaa;
+  --theme-accent-subtle: rgba(0, 255, 136, 0.16);
+  --theme-accent-glow: rgba(0, 255, 136, 0.4);
+  --theme-border: #144e2f;
+  --theme-border-strong: #1e7043;
+  --theme-text-main: #ecfdf5;
+  --theme-text-muted: #6ee7b7;
+  --theme-text-subtle: #34d399aa;
+  --theme-tag-bg: #0e301e;
+}
+
+[data-theme="forest-dark"] {
+  --theme-bg-main: #081711;
+  --theme-card-bg: #122a1f;
+  --theme-card-elevated: #1a3b2c;
+  --theme-card-hover: #224c39;
+  --theme-accent: #34d399;
+  --theme-accent-hover: #6ee7b7;
+  --theme-accent-subtle: rgba(52, 211, 153, 0.18);
+  --theme-accent-glow: rgba(52, 211, 153, 0.35);
+  --theme-border: #204b39;
+  --theme-border-strong: #2e6950;
+  --theme-text-main: #f2fbf7;
+  --theme-text-muted: #99f6e4;
+  --theme-text-subtle: #5eead4bb;
+  --theme-tag-bg: #163628;
+}
+
+[data-theme="sage-olive"] {
+  --theme-bg-main: #101712;
+  --theme-card-bg: #18241d;
+  --theme-card-elevated: #223329;
+  --theme-card-hover: #2c4235;
+  --theme-accent: #a3e635;
+  --theme-accent-hover: #bef264;
+  --theme-accent-subtle: rgba(163, 230, 53, 0.15);
+  --theme-accent-glow: rgba(163, 230, 53, 0.32);
+  --theme-border: #293e32;
+  --theme-border-strong: #3b5747;
+  --theme-text-main: #f7fee7;
+  --theme-text-muted: #bef264;
+  --theme-text-subtle: #a3e635aa;
+  --theme-tag-bg: #1f3025;
+}
+
+[data-theme="jade-slate"] {
+  --theme-bg-main: #081617;
+  --theme-card-bg: #0f2728;
+  --theme-card-elevated: #16383a;
+  --theme-card-hover: #1e4a4c;
+  --theme-accent: #2dd4bf;
+  --theme-accent-hover: #5eead4;
+  --theme-accent-subtle: rgba(45, 212, 191, 0.15);
+  --theme-accent-glow: rgba(45, 212, 191, 0.32);
+  --theme-border: #1a4749;
+  --theme-border-strong: #256467;
+  --theme-text-main: #f0fdfa;
+  --theme-text-muted: #5eead4;
+  --theme-text-subtle: #2dd4bfaa;
+  --theme-tag-bg: #143537;
+}
+
 @layer base {
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: #f0f9ff;
-    color: #0f172a;
+    background-color: var(--theme-bg-main);
+    color: var(--theme-text-main);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -20,12 +123,168 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #f0f9ff;
+  background: var(--theme-bg-main);
 }
 ::-webkit-scrollbar-thumb {
-  background: #bae6fd;
+  background: var(--theme-border-strong);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #7dd3fc;
+  background: var(--theme-accent);
+}
+
+/* =========================================================================
+   UNIVERSAL GREEN THEME HARMONIZATION
+   Guarantees that all screens, dashboards, modals, and widgets
+   adopt the single cohesive green aesthetic completely.
+   ========================================================================= */
+
+/* Background surfaces */
+.bg-sky-50,
+.bg-sky-50\/50,
+.bg-sky-50\/70,
+.bg-sky-50\/80,
+.bg-slate-50,
+.bg-gray-50,
+.bg-zinc-50 {
+  background-color: var(--theme-bg-main) !important;
+}
+
+.bg-white,
+.bg-white\/95,
+.bg-white\/90,
+.bg-white\/80,
+.bg-white\/70,
+.bg-white\/60,
+.bg-white\/50 {
+  background-color: var(--theme-card-bg) !important;
+}
+
+.bg-sky-100,
+.bg-sky-100\/50,
+.bg-sky-100\/60,
+.bg-sky-100\/70,
+.bg-sky-100\/80,
+.bg-slate-100,
+.bg-gray-100,
+.bg-zinc-100 {
+  background-color: var(--theme-card-elevated) !important;
+}
+
+.bg-sky-200,
+.bg-slate-200 {
+  background-color: var(--theme-card-hover) !important;
+}
+
+.bg-sky-500,
+.bg-sky-600,
+.bg-blue-600,
+.bg-indigo-600,
+.bg-sky-700 {
+  background-color: var(--theme-accent) !important;
+  color: var(--theme-bg-main) !important;
+}
+
+/* Text colors */
+.text-slate-900,
+.text-slate-800,
+.text-gray-900,
+.text-gray-800,
+.text-zinc-900 {
+  color: var(--theme-text-main) !important;
+}
+
+.text-slate-700,
+.text-slate-600,
+.text-gray-700,
+.text-gray-600,
+.text-zinc-600 {
+  color: var(--theme-text-muted) !important;
+}
+
+.text-slate-500,
+.text-slate-400,
+.text-gray-500,
+.text-gray-400 {
+  color: var(--theme-text-subtle) !important;
+}
+
+.text-sky-700,
+.text-sky-600,
+.text-sky-800,
+.text-sky-500,
+.text-blue-600,
+.text-indigo-600 {
+  color: var(--theme-accent) !important;
+}
+
+.text-sky-900,
+.text-blue-900 {
+  color: var(--theme-text-main) !important;
+}
+
+/* Borders */
+.border-sky-100,
+.border-sky-200,
+.border-sky-200\/80,
+.border-slate-100,
+.border-slate-200,
+.border-gray-100,
+.border-gray-200 {
+  border-color: var(--theme-border) !important;
+}
+
+.border-sky-300,
+.border-slate-300,
+.border-gray-300 {
+  border-color: var(--theme-border-strong) !important;
+}
+
+/* Hover effects */
+.hover\:bg-sky-50:hover,
+.hover\:bg-slate-50:hover,
+.hover\:bg-gray-50:hover {
+  background-color: var(--theme-card-hover) !important;
+}
+
+.hover\:bg-sky-100:hover,
+.hover\:bg-slate-100:hover {
+  background-color: var(--theme-card-elevated) !important;
+}
+
+.hover\:bg-sky-700:hover,
+.hover\:bg-sky-600:hover,
+.hover\:bg-blue-700:hover {
+  background-color: var(--theme-accent-hover) !important;
+}
+
+.hover\:text-sky-800:hover,
+.hover\:text-sky-900:hover,
+.hover\:text-sky-700:hover {
+  color: var(--theme-accent-hover) !important;
+}
+
+/* Form controls */
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  background-color: var(--theme-card-elevated) !important;
+  color: var(--theme-text-main) !important;
+  border-color: var(--theme-border) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--theme-text-subtle) !important;
+}
+
+/* Accent Badges */
+.bg-sky-100.text-sky-700,
+.bg-sky-100.text-sky-800,
+.bg-sky-100.text-sky-900,
+.bg-blue-100.text-blue-700,
+.bg-indigo-100.text-indigo-700 {
+  background-color: var(--theme-tag-bg) !important;
+  color: var(--theme-accent) !important;
+  border: 1px solid var(--theme-border) !important;
 }

@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "ClassWatch - Student Classroom Companion",
+  "version": "1.0.0",
+  "description": "Reports active tab hostname to your teacher during classroom study sessions. Privacy-first: never sends full URLs, keystrokes, or private messages.",
+  "permissions": [
+    "tabs",
+    "storage",
+    "notifications"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "ClassWatch Status"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}

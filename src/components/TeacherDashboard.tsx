@@ -12,9 +12,14 @@ import {
   AttendanceRecord,
   StudentStudyActivityItem,
   StudyModePolicy,
+  ClassWatchClass,
+  ClassWatchStudent,
+  ClassWatchAlert,
 } from '../types.ts';
 import { Logo } from './Logo.tsx';
+import { ClassWatchMonitor } from './ClassWatchMonitor.tsx';
 import {
+  Shield,
   BookOpen,
   Plus,
   Upload,
@@ -72,6 +77,24 @@ interface TeacherDashboardProps {
   onUpdateComplaint: (complaintId: string, status: 'Under Review' | 'In Progress' | 'Resolved', note: string) => void;
   onUpdatePolicy: (updatedPolicy: StudyModePolicy) => void;
   onLogout: () => void;
+  // ClassWatch Integration Props
+  classWatchClasses?: ClassWatchClass[];
+  activeClassWatchCode?: string;
+  classWatchStudents?: ClassWatchStudent[];
+  classWatchAlerts?: ClassWatchAlert[];
+  soundEnabled?: boolean;
+  onToggleSound?: () => void;
+  onSelectClassWatch?: (code: string) => void;
+  onCreateClassWatch?: (name: string) => void;
+  onAddAllowedDomain?: (domain: string) => void;
+  onRemoveAllowedDomain?: (domain: string) => void;
+  onWarnStudent?: (studentId: string, customMessage?: string) => void;
+  onToggleLockStudent?: (studentId: string) => void;
+  onResetStudentPassword?: (studentRegNumber: string, newPass: string) => void;
+  onRemoveClassWatchStudent?: (studentId: string) => void;
+  onDismissAlert?: (alertId: string) => void;
+  onClearAlerts?: () => void;
+  onOpenExtensionModal?: () => void;
 }
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
@@ -99,9 +122,27 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   onUpdateComplaint,
   onUpdatePolicy,
   onLogout,
+  classWatchClasses = [],
+  activeClassWatchCode = '4892',
+  classWatchStudents = [],
+  classWatchAlerts = [],
+  soundEnabled = true,
+  onToggleSound = () => {},
+  onSelectClassWatch = () => {},
+  onCreateClassWatch = () => {},
+  onAddAllowedDomain = () => {},
+  onRemoveAllowedDomain = () => {},
+  onWarnStudent = () => {},
+  onToggleLockStudent = () => {},
+  onResetStudentPassword = () => {},
+  onRemoveClassWatchStudent = () => {},
+  onDismissAlert = () => {},
+  onClearAlerts = () => {},
+  onOpenExtensionModal = () => {},
 }) => {
   type TeacherTab =
     | 'overview'
+    | 'classwatch'
     | 'classes'
     | 'attendance'
     | 'assignments'
@@ -426,6 +467,18 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               Overview
             </button>
             <button
+              onClick={() => setActiveTab('classwatch')}
+              className={`px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer font-bold ${
+                activeTab === 'classwatch'
+                  ? 'bg-[#16271f] text-[#5cc79a] border border-[#233a30] shadow-sm'
+                  : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Live ClassWatch</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            </button>
+            <button
               onClick={() => setActiveTab('classes')}
               className={`px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'classes'
@@ -548,6 +601,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           {(
             [
               'overview',
+              'classwatch',
               'classes',
               'attendance',
               'assignments',
@@ -563,11 +617,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               onClick={() => setActiveTab(tab)}
               className={`px-2.5 py-1 rounded-lg shrink-0 capitalize cursor-pointer ${
                 activeTab === tab
-                  ? 'bg-sky-600 text-white font-semibold'
+                  ? tab === 'classwatch'
+                    ? 'bg-[#16271f] text-[#5cc79a] font-bold border border-[#233a30]'
+                    : 'bg-sky-600 text-white font-semibold'
                   : 'text-slate-600 bg-sky-50'
               }`}
             >
-              {tab === 'activity_reports'
+              {tab === 'classwatch'
+                ? 'Live ClassWatch'
+                : tab === 'activity_reports'
                 ? 'Activity Reports'
                 : tab === 'classes'
                 ? 'My Classes'
@@ -593,6 +651,29 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               <X className="w-4 h-4" />
             </button>
           </div>
+        )}
+
+        {/* TAB: CLASSWATCH LIVE MONITOR */}
+        {activeTab === 'classwatch' && (
+          <ClassWatchMonitor
+            classes={classWatchClasses}
+            activeClassCode={activeClassWatchCode}
+            students={classWatchStudents}
+            alerts={classWatchAlerts}
+            soundEnabled={soundEnabled}
+            onToggleSound={onToggleSound}
+            onSelectClass={onSelectClassWatch}
+            onCreateClass={onCreateClassWatch}
+            onAddAllowedDomain={onAddAllowedDomain}
+            onRemoveAllowedDomain={onRemoveAllowedDomain}
+            onWarnStudent={onWarnStudent}
+            onToggleLockStudent={onToggleLockStudent}
+            onResetStudentPassword={onResetStudentPassword}
+            onRemoveStudent={onRemoveClassWatchStudent}
+            onDismissAlert={onDismissAlert}
+            onClearAlerts={onClearAlerts}
+            onOpenExtensionModal={onOpenExtensionModal}
+          />
         )}
 
         {/* TAB 1: OVERVIEW */}
