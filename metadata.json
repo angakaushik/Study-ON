@@ -1,0 +1,6 @@
+{
+  "name": "StudyOn - Student Educator",
+  "description": "Clean, modern, Android-friendly student education platform prototype for Students, Teachers, Parents, and Principals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
