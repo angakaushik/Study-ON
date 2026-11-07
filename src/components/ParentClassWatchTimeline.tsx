@@ -26,7 +26,7 @@ interface ParentClassWatchTimelineProps {
   students: ClassWatchStudent[];
   timeline: ClassWatchTimelineEvent[];
   alerts: ClassWatchAlert[];
-  onLinkChild: (studentId: string, parentCode: string) => { success: boolean; message: string };
+  onLinkChild: (studentId: string, parentCode: string) => Promise<{ success: boolean; message: string }> | { success: boolean; message: string };
   onUnlinkChild: (studentRegNumber: string) => void;
 }
 
@@ -69,7 +69,7 @@ export const ParentClassWatchTimeline: React.FC<ParentClassWatchTimelineProps> =
   const onTaskEvents = childTimeline.filter((t) => t.status === 'On task').length;
   const focusPercentage = totalEvents > 0 ? Math.round((onTaskEvents / totalEvents) * 100) : 95;
 
-  const handleLinkSubmit = (e: React.FormEvent) => {
+  const handleLinkSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLinkError('');
     setLinkSuccess('');
@@ -79,18 +79,22 @@ export const ParentClassWatchTimeline: React.FC<ParentClassWatchTimelineProps> =
       return;
     }
 
-    const res = onLinkChild(studentIdInput.trim(), parentCodeInput.trim());
-    if (!res.success) {
-      setLinkError(res.message);
-    } else {
-      setLinkSuccess(res.message);
-      setSelectedStudentReg(studentIdInput.trim());
-      setTimeout(() => {
-        setShowLinkModal(false);
-        setStudentIdInput('');
-        setParentCodeInput('');
-        setLinkSuccess('');
-      }, 1200);
+    try {
+      const res = await onLinkChild(studentIdInput.trim(), parentCodeInput.trim());
+      if (!res.success) {
+        setLinkError(res.message);
+      } else {
+        setLinkSuccess(res.message);
+        setSelectedStudentReg(studentIdInput.trim());
+        setTimeout(() => {
+          setShowLinkModal(false);
+          setStudentIdInput('');
+          setParentCodeInput('');
+          setLinkSuccess('');
+        }, 1200);
+      }
+    } catch (err: any) {
+      setLinkError(err.message || 'Failed to link child');
     }
   };
 

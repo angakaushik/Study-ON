@@ -55,6 +55,7 @@ interface ClassWatchMonitorProps {
   onToggleLockStudent: (studentId: string) => void;
   onResetStudentPassword: (studentRegNumber: string, newPass: string) => void;
   onRemoveStudent: (studentId: string) => void;
+  onAllowStudent?: (studentId: string) => void;
   onDismissAlert: (alertId: string) => void;
   onClearAlerts: () => void;
   onOpenExtensionModal: () => void;
@@ -75,6 +76,7 @@ export const ClassWatchMonitor: React.FC<ClassWatchMonitorProps> = ({
   onToggleLockStudent,
   onResetStudentPassword,
   onRemoveStudent,
+  onAllowStudent,
   onDismissAlert,
   onClearAlerts,
   onOpenExtensionModal,
@@ -106,6 +108,10 @@ export const ClassWatchMonitor: React.FC<ClassWatchMonitorProps> = ({
   // Filter students for active class
   const classStudents = students.filter(
     (s) => s.classCode === activeClass?.code && !s.isRemoved
+  );
+
+  const removedStudents = students.filter(
+    (s) => s.isRemoved
   );
 
   // Filter alerts for active class
@@ -439,6 +445,44 @@ export const ClassWatchMonitor: React.FC<ClassWatchMonitorProps> = ({
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Removed Students Roster & Allow Rejoin Action */}
+          {removedStudents.length > 0 && (
+            <div className="mt-4 p-4 rounded-xl bg-[#141d18] border border-[#233a30]">
+              <div className="flex items-center justify-between mb-2.5">
+                <div className="flex items-center gap-2">
+                  <UserX className="w-4 h-4 text-rose-400" />
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">
+                    Removed Students ({removedStudents.length})
+                  </span>
+                </div>
+                <span className="text-[10px] text-[#94a3b8]">
+                  Blocked from rejoining until allowed
+                </span>
+              </div>
+              <div className="space-y-2">
+                {removedStudents.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex items-center justify-between p-2.5 rounded-lg bg-[#0f1c18] border border-[#233a30] text-xs"
+                  >
+                    <div>
+                      <span className="font-bold text-white mr-2">{s.name}</span>
+                      <span className="font-mono text-[#94a3b8] text-[11px]">{s.regNumber}</span>
+                    </div>
+                    {onAllowStudent && (
+                      <button
+                        onClick={() => onAllowStudent(s.id)}
+                        className="px-3 py-1 rounded-lg bg-[#1f3d30] hover:bg-[#284f3e] text-[#5cc79a] border border-[#3b6754] text-[11px] font-bold cursor-pointer transition-colors"
+                      >
+                        Allow Rejoin
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

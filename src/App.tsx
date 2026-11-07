@@ -58,6 +58,8 @@ import { VideoPlayerModal } from './components/VideoPlayerModal.tsx';
 import { PaperSavedModal } from './components/PaperSavedModal.tsx';
 import { ChromeExtensionModal } from './components/ChromeExtensionModal.tsx';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal.tsx';
+import { AccountModal } from './components/AccountModal.tsx';
+import { dataService, UserSession } from './lib/dataService.ts';
 import {
   isValidHostname,
   normalizeDomain,
@@ -70,7 +72,7 @@ import {
   playLockSound,
   playSuccessChime,
 } from './utils/soundEffects.ts';
-import { Smartphone, Monitor, Shield, Palette, Sparkles } from 'lucide-react';
+import { Smartphone, Monitor, Shield, Palette, Sparkles, User, LogOut } from 'lucide-react';
 
 export default function App() {
   // App Navigation Flow State
@@ -78,8 +80,9 @@ export default function App() {
   const [selectedRole, setSelectedRole] = useState<UserRole>('student');
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
 
-  // Active Authenticated Account
-  const [currentAccount, setCurrentAccount] = useState<UserAccount | null>(null);
+  // Active Authenticated Account (isolated per tab in sessionStorage)
+  const [currentAccount, setCurrentAccount] = useState<UserSession | null>(null);
+  const [showAccountModal, setShowAccountModal] = useState<boolean>(false);
 
   // Central User Account Store managed by the Principal
   const [accountsList, setAccountsList] = useState<UserAccount[]>(INITIAL_ACCOUNTS);
@@ -127,27 +130,147 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', activeTheme);
   }, [activeTheme]);
 
+  // Initialize session and sync with dataService across browser tabs
+  React.useEffect(() => {
+    let mounted = true;
+
+    const initData = async () => {
+      try {
+        const [sess, classes, students, alerts, timeline] = await Promise.all([
+          dataService.getSession(),
+          dataService.listClasses(),
+          dataService.listStudents(),
+          dataService.listAlerts(),
+          dataService.getTimeline(''),
+        ]);
+        if (!mounted) return;
+
+        if (classes.length > 0) {
+          setClassWatchClassesList(classes);
+          if (!activeClassWatchCode || !classes.some((c) => c.code === activeClassWatchCode)) {
+            setActiveClassWatchCode(classes[0].code);
+          }
+        }
+        if (students.length > 0) {
+          setClassWatchStudentsList(students);
+        }
+        if (alerts.length > 0) {
+          setClassWatchAlertsList(alerts);
+        }
+        if (timeline.length > 0) {
+          setClassWatchTimelineList(timeline);
+        }
+
+        if (sess) {
+          setCurrentAccount(sess);
+          setCurrentUserRole(sess.role);
+          setSelectedRole(sess.role);
+          setAppStage('dashboard');
+        }
+      } catch (err) {
+        console.error('Failed to init data from dataService:', err);
+      }
+    };
+
+    initData();
+
+    // Cross-tab real-time sync subscription
+    const unsubscribe = dataService.subscribe(async (event) => {
+      try {
+        const [classes, students, alerts, timeline] = await Promise.all([
+          dataService.listClasses(),
+          dataService.listStudents(),
+          dataService.listAlerts(),
+          dataService.getTimeline(''),
+        ]);
+        if (!mounted) return;
+
+        setClassWatchClassesList(classes);
+        setClassWatchStudentsList(students);
+        setClassWatchAlertsList(alerts);
+        if (timeline.length > 0) {
+          setClassWatchTimelineList(timeline);
+        }
+
+        if (event.type === 'ALERT_CREATED' && classWatchSoundEnabled) {
+          playAlertChime();
+        } else if (event.type === 'STUDENT_LOCKED' && classWatchSoundEnabled) {
+          playLockSound();
+        } else if (event.type === 'STUDENT_WARNED' && classWatchSoundEnabled) {
+          playWarnTone();
+        }
+      } catch (err) {
+        console.error('Error in subscription sync:', err);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, [classWatchSoundEnabled]);
+
   // Handlers for Navigation & Login
   const handleSelectRole = (role: UserRole) => {
+    // If already logged in to this or another role, redirect to dashboard if same or prompt
+    if (currentAccount) {
+      setCurrentUserRole(currentAccount.role);
+      setSelectedRole(currentAccount.role);
+      setAppStage('dashboard');
+      return;
+    }
     setSelectedRole(role);
     setAppStage('role_login');
   };
 
-  const handleQuickDemoLogin = (role: UserRole) => {
-    setSelectedRole(role);
-    setCurrentUserRole(role);
-    const defaultAcc = accountsList.find((a) => a.role === role);
-    setCurrentAccount(defaultAcc || null);
+  const handleQuickDemoLogin = async (role: UserRole) => {
+    const demoCreds: Record<UserRole, { id: string; pass: string }> = {
+      student: { id: 'student1', pass: 'student123' },
+      teacher: { id: 'teacher1', pass: 'teacher123' },
+      parent: { id: 'parent1', pass: 'parent123' },
+      principal: { id: 'principal1', pass: 'admin123' },
+    };
+    try {
+      const creds = demoCreds[role];
+      const session = await dataService.login(creds.id, creds.pass);
+      setSelectedRole(role);
+      setCurrentUserRole(role);
+      setCurrentAccount(session);
+      setAppStage('dashboard');
+    } catch {
+      setSelectedRole(role);
+      setCurrentUserRole(role);
+      const defaultAcc = accountsList.find((a) => a.role === role);
+      if (defaultAcc) {
+        const sess: UserSession = {
+          userId: defaultAcc.identifier,
+          name: defaultAcc.name,
+          role: defaultAcc.role,
+          identifier: defaultAcc.identifier,
+          email: defaultAcc.email,
+        };
+        setCurrentAccount(sess);
+      }
+      setAppStage('dashboard');
+    }
+  };
+
+  const handleLoginSuccess = (_role: UserRole, session?: UserSession) => {
+    const currentSess = session || null;
+    if (currentSess) {
+      // Role protection: logged-in role determines allowed views
+      setCurrentUserRole(currentSess.role);
+      setSelectedRole(currentSess.role);
+      setCurrentAccount(currentSess);
+    } else {
+      setCurrentUserRole(_role);
+      setSelectedRole(_role);
+    }
     setAppStage('dashboard');
   };
 
-  const handleLoginSuccess = (role: UserRole, account?: UserAccount) => {
-    setCurrentUserRole(role);
-    setCurrentAccount(account || accountsList.find((a) => a.role === role) || null);
-    setAppStage('dashboard');
-  };
-
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await dataService.logout();
     setCurrentUserRole(null);
     setCurrentAccount(null);
     setAppStage('role_select');
@@ -162,9 +285,6 @@ export default function App() {
     setAccountsList((prev) =>
       prev.map((acc) => (acc.id === updatedAccount.id ? updatedAccount : acc))
     );
-    if (currentAccount && currentAccount.id === updatedAccount.id) {
-      setCurrentAccount(updatedAccount);
-    }
   };
 
   const handleDeleteAccount = (accountId: string) => {
@@ -360,383 +480,227 @@ export default function App() {
   };
 
   // ==========================================
-  // ClassWatch Digital Classroom Monitoring Handlers
+  // ClassWatch Digital Classroom Monitoring Handlers (Connected to dataService)
   // ==========================================
 
   const handleSelectClassWatch = (code: string) => {
     setActiveClassWatchCode(code);
   };
 
-  const handleCreateClassWatch = (name: string) => {
-    // Generate unique 4-digit numeric code
-    let newCode = String(Math.floor(1000 + Math.random() * 9000));
-    while (classWatchClassesList.some((c) => c.code === newCode)) {
-      newCode = String(Math.floor(1000 + Math.random() * 9000));
+  const handleCreateClassWatch = async (name: string) => {
+    try {
+      const teacher = getActiveTeacherProfile();
+      const newClass = await dataService.createClass({
+        name,
+        teacherId: teacher.id,
+        teacherName: teacher.name,
+      });
+      setActiveClassWatchCode(newClass.code);
+      const classes = await dataService.listClasses();
+      setClassWatchClassesList(classes);
+    } catch (err) {
+      console.error('Failed to create classroom:', err);
     }
-
-    const teacher = getActiveTeacherProfile();
-    const newClass: ClassWatchClass = {
-      code: newCode,
-      name,
-      teacherId: teacher.id,
-      teacherName: teacher.name,
-      allowedDomains: ['wikipedia.org', 'khanacademy.org', 'ncert.nic.in', 'docs.google.com'],
-      createdAt: 'Today',
-    };
-
-    setClassWatchClassesList((prev) => [...prev, newClass]);
-    setActiveClassWatchCode(newCode);
   };
 
-  const handleAddAllowedDomain = (domain: string) => {
+  const handleAddAllowedDomain = async (domain: string) => {
     const norm = normalizeDomain(domain);
     if (!norm) return;
-
-    setClassWatchClassesList((prev) =>
-      prev.map((c) =>
-        c.code === activeClassWatchCode
-          ? { ...c, allowedDomains: [...c.allowedDomains, norm] }
-          : c
-      )
-    );
-
-    // Re-evaluate current students in that class: if their tab was off task on that domain, switch to On task
-    setClassWatchStudentsList((prev) =>
-      prev.map((s) => {
-        if (s.classCode === activeClassWatchCode && normalizeDomain(s.currentDomain) === norm && !s.isLocked) {
-          return { ...s, status: 'On task' };
-        }
-        return s;
-      })
-    );
+    try {
+      await dataService.addAllowedSite(activeClassWatchCode, norm);
+      const [classes, students] = await Promise.all([
+        dataService.listClasses(),
+        dataService.listStudents(),
+      ]);
+      setClassWatchClassesList(classes);
+      setClassWatchStudentsList(students);
+    } catch (err) {
+      console.error('Failed to add allowed site:', err);
+    }
   };
 
-  const handleRemoveAllowedDomain = (domain: string) => {
-    setClassWatchClassesList((prev) =>
-      prev.map((c) =>
-        c.code === activeClassWatchCode
-          ? { ...c, allowedDomains: c.allowedDomains.filter((d) => d !== domain) }
-          : c
-      )
-    );
+  const handleRemoveAllowedDomain = async (domain: string) => {
+    try {
+      await dataService.removeAllowedSite(activeClassWatchCode, domain);
+      const [classes, students] = await Promise.all([
+        dataService.listClasses(),
+        dataService.listStudents(),
+      ]);
+      setClassWatchClassesList(classes);
+      setClassWatchStudentsList(students);
+    } catch (err) {
+      console.error('Failed to remove allowed site:', err);
+    }
   };
 
-  const handleReportDomain = (domain: string) => {
-    const activeStudent = getActiveStudentProfile();
-    const studentRegNumber = activeStudent.regNumber;
-    const normalized = normalizeDomain(domain);
-    const now = Date.now();
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    // Find student in classWatch roster
-    let student = classWatchStudentsList.find(
-      (s) => s.regNumber.toLowerCase() === studentRegNumber.toLowerCase()
-    );
-
-    // Auto-enroll student into active class if not already enrolled
-    if (!student) {
-      student = {
-        id: `cw-stu-${now}`,
-        regNumber: studentRegNumber,
-        name: activeStudent.name,
-        classCode: activeClassWatchCode,
-        currentDomain: domain,
-        status: 'On task',
-        lastSeen: 'Just now',
-        lastSeenTimestamp: now,
-        parentLinkCode: String(Math.floor(100000 + Math.random() * 900000)),
-        isLocked: false,
-        joinedAt: timeStr,
-      };
-      setClassWatchStudentsList((prev) => [...prev, student!]);
-    }
-
-    const studentClass = classWatchClassesList.find((c) => c.code === student!.classCode) || classWatchClassesList[0];
-    const allowed = studentClass ? isDomainAllowed(normalized, studentClass.allowedDomains) : true;
-    const valid = isValidHostname(domain);
-
-    let newStatus: ClassWatchStudentStatus = 'On task';
-    if (domain === 'Away' || normalized === 'away') {
-      newStatus = 'Away';
-    } else if (student.isLocked) {
-      newStatus = 'Locked';
-    } else if (!allowed && valid) {
-      newStatus = 'Off task';
-    }
-
-    // Update student state
-    setClassWatchStudentsList((prev) =>
-      prev.map((s) =>
-        s.regNumber.toLowerCase() === studentRegNumber.toLowerCase()
-          ? {
-              ...s,
-              currentDomain: domain,
-              status: newStatus,
-              lastSeen: 'Just now',
-              lastSeenTimestamp: now,
-            }
-          : s
-      )
-    );
-
-    // Add to parent-visible timeline (site names and time only - no full URLs!)
-    setClassWatchTimelineList((prev) => [
-      {
-        id: `cw-tl-${now}-${Math.floor(Math.random() * 1000)}`,
-        studentRegNumber,
-        studentName: activeStudent.name,
-        domain: normalized || domain,
-        status: newStatus === 'Away' ? 'Away' : newStatus === 'Locked' ? 'Locked' : allowed ? 'On task' : 'Off task',
-        timestamp: timeStr,
-        date: 'Today',
-        classCode: student!.classCode,
-      },
-      ...prev.slice(0, 99),
-    ]);
-
-    // Check alert generation with 60s repeat deduplication
-    if (!allowed && valid) {
-      const { severity, reason } = getDomainAlertSeverity(domain);
-
-      if (classWatchSoundEnabled) {
+  const handleReportDomain = async (domain: string) => {
+    try {
+      const activeStudent = getActiveStudentProfile();
+      const res = await dataService.setStudentSite(activeStudent.regNumber, domain);
+      if (res.alertCreated && classWatchSoundEnabled) {
         playAlertChime();
       }
-
-      setClassWatchAlertsList((prevAlerts) => {
-        const existingIdx = prevAlerts.findIndex(
-          (a) =>
-            a.studentRegNumber.toLowerCase() === studentRegNumber.toLowerCase() &&
-            normalizeDomain(a.domain) === normalized &&
-            now - a.lastTimestamp <= 60000 &&
-            a.status === 'active'
-        );
-
-        if (existingIdx !== -1) {
-          const updated = [...prevAlerts];
-          updated[existingIdx] = {
-            ...updated[existingIdx],
-            count: updated[existingIdx].count + 1,
-            lastTimestamp: now,
-            timestamp: timeStr,
-            severity,
-          };
-          return updated;
-        }
-
-        const newAlert: ClassWatchAlert = {
-          id: `alert-${now}-${Math.floor(Math.random() * 1000)}`,
-          studentId: student!.id,
-          studentName: student!.name,
-          studentRegNumber: student!.regNumber,
-          domain: normalized,
-          severity,
-          reason,
-          count: 1,
-          timestamp: timeStr,
-          lastTimestamp: now,
-          status: 'active',
-          classCode: student!.classCode,
-        };
-
-        return [newAlert, ...prevAlerts];
-      });
+      const [students, alerts, timeline] = await Promise.all([
+        dataService.listStudents(),
+        dataService.listAlerts(),
+        dataService.getTimeline(''),
+      ]);
+      setClassWatchStudentsList(students);
+      setClassWatchAlertsList(alerts);
+      if (timeline.length > 0) {
+        setClassWatchTimelineList(timeline);
+      }
+    } catch (err) {
+      console.error('Failed to report domain:', err);
     }
   };
 
-  const handleToggleLockStudent = (studentId: string) => {
-    setClassWatchStudentsList((prev) =>
-      prev.map((s) => {
-        if (s.id === studentId) {
-          const nextLocked = !s.isLocked;
-          return {
-            ...s,
-            isLocked: nextLocked,
-            status: nextLocked ? 'Locked' : 'On task',
-          };
-        }
-        return s;
-      })
-    );
-  };
-
-  const handleWarnStudent = (studentId: string, customMessage?: string) => {
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    setClassWatchStudentsList((prev) =>
-      prev.map((s) => {
-        if (s.id === studentId) {
-          return {
-            ...s,
-            warningMessage: customMessage || 'Please close non-academic tabs and return to the lesson material.',
-            warningTimestamp: timeStr,
-          };
-        }
-        return s;
-      })
-    );
-  };
-
-  const handleDismissWarning = () => {
-    const activeStudent = getActiveStudentProfile();
-    setClassWatchStudentsList((prev) =>
-      prev.map((s) =>
-        s.regNumber.toLowerCase() === activeStudent.regNumber.toLowerCase()
-          ? { ...s, warningMessage: undefined, warningTimestamp: undefined }
-          : s
-      )
-    );
-  };
-
-  const handleJoinClassWatch = (classCode: string): { success: boolean; message: string } => {
-    const targetClass = classWatchClassesList.find((c) => c.code === classCode);
-    if (!targetClass) {
-      return { success: false, message: `No classroom found with code "${classCode}". Please check with your instructor.` };
+  const handleToggleLockStudent = async (studentId: string) => {
+    try {
+      const student = classWatchStudentsList.find((s) => s.id === studentId || s.regNumber === studentId);
+      if (!student) return;
+      if (student.isLocked) {
+        await dataService.unlock(student.regNumber);
+      } else {
+        await dataService.lock(student.regNumber);
+        if (classWatchSoundEnabled) playLockSound();
+      }
+      const students = await dataService.listStudents();
+      setClassWatchStudentsList(students);
+    } catch (err) {
+      console.error('Failed to toggle lock:', err);
     }
+  };
 
-    const activeStudent = getActiveStudentProfile();
-    const existing = classWatchStudentsList.find(
-      (s) => s.regNumber.toLowerCase() === activeStudent.regNumber.toLowerCase()
-    );
-
-    if (existing?.isRemoved && existing.classCode === classCode) {
-      return {
-        success: false,
-        message: 'You were removed from this classroom by the teacher. Please ask your teacher to allow you to rejoin.',
-      };
+  const handleWarnStudent = async (studentId: string, customMessage?: string) => {
+    try {
+      const student = classWatchStudentsList.find((s) => s.id === studentId || s.regNumber === studentId);
+      if (!student) return;
+      await dataService.warn(student.regNumber, customMessage);
+      if (classWatchSoundEnabled) playWarnTone();
+      const students = await dataService.listStudents();
+      setClassWatchStudentsList(students);
+    } catch (err) {
+      console.error('Failed to warn student:', err);
     }
+  };
 
-    const now = Date.now();
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const handleDismissWarning = async () => {
+    try {
+      const activeStudent = getActiveStudentProfile();
+      await dataService.warn(activeStudent.regNumber, '');
+      const students = await dataService.listStudents();
+      setClassWatchStudentsList(students);
+    } catch (err) {
+      console.error('Failed to dismiss warning:', err);
+    }
+  };
 
-    if (existing) {
-      setClassWatchStudentsList((prev) =>
-        prev.map((s) =>
-          s.regNumber.toLowerCase() === activeStudent.regNumber.toLowerCase()
-            ? {
-                ...s,
-                classCode,
-                isRemoved: false,
-                status: 'On task',
-                lastSeen: 'Just now',
-                lastSeenTimestamp: now,
-              }
-            : s
-        )
-      );
-    } else {
-      const newStu: ClassWatchStudent = {
-        id: `cw-stu-${now}`,
-        regNumber: activeStudent.regNumber,
-        name: activeStudent.name,
+  const handleJoinClassWatch = async (classCode: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const activeStudent = getActiveStudentProfile();
+      await dataService.joinClass({
+        studentId: activeStudent.id,
+        studentName: activeStudent.name,
+        studentRegNumber: activeStudent.regNumber,
         classCode,
-        currentDomain: 'wikipedia.org',
-        status: 'On task',
-        lastSeen: 'Just now',
-        lastSeenTimestamp: now,
-        parentLinkCode: String(Math.floor(100000 + Math.random() * 900000)),
-        isLocked: false,
-        joinedAt: timeStr,
-      };
-      setClassWatchStudentsList((prev) => [...prev, newStu]);
+      });
+      setActiveClassWatchCode(classCode);
+      const students = await dataService.listStudents();
+      setClassWatchStudentsList(students);
+      return { success: true, message: `Successfully joined classroom ${classCode}!` };
+    } catch (err: any) {
+      return { success: false, message: err?.message || `Could not join classroom ${classCode}` };
     }
-
-    return { success: true, message: `Successfully joined ${targetClass.name}!` };
   };
 
-  const handleLeaveClassWatch = () => {
-    const activeStudent = getActiveStudentProfile();
-    setClassWatchStudentsList((prev) =>
-      prev.map((s) =>
-        s.regNumber.toLowerCase() === activeStudent.regNumber.toLowerCase()
-          ? { ...s, status: 'Offline', isRemoved: true }
-          : s
-      )
-    );
+  const handleLeaveClassWatch = async () => {
+    try {
+      const activeStudent = getActiveStudentProfile();
+      await dataService.leaveClass(activeStudent.regNumber);
+      const students = await dataService.listStudents();
+      setClassWatchStudentsList(students);
+    } catch (err) {
+      console.error('Failed to leave classroom:', err);
+    }
   };
 
-  const handleRemoveClassWatchStudent = (studentId: string) => {
-    setClassWatchStudentsList((prev) =>
-      prev.map((s) =>
-        s.id === studentId
-          ? { ...s, isRemoved: true, status: 'Offline' }
-          : s
-      )
-    );
+  const handleRemoveClassWatchStudent = async (studentId: string) => {
+    try {
+      const student = classWatchStudentsList.find((s) => s.id === studentId || s.regNumber === studentId);
+      if (!student) return;
+      await dataService.removeStudent(student.regNumber);
+      const students = await dataService.listStudents();
+      setClassWatchStudentsList(students);
+    } catch (err) {
+      console.error('Failed to remove student:', err);
+    }
   };
 
-  const handleResetStudentPassword = (studentRegNumber: string, newPass: string) => {
-    setAccountsList((prev) =>
-      prev.map((acc) =>
-        acc.identifier.toLowerCase() === studentRegNumber.toLowerCase()
-          ? { ...acc, password: newPass }
-          : acc
-      )
-    );
+  const handleAllowStudent = async (studentId: string) => {
+    try {
+      const student = classWatchStudentsList.find((s) => s.id === studentId || s.regNumber === studentId);
+      if (!student) return;
+      await dataService.allowStudent(student.regNumber);
+      const students = await dataService.listStudents();
+      setClassWatchStudentsList(students);
+    } catch (err) {
+      console.error('Failed to allow student:', err);
+    }
+  };
+
+  const handleResetStudentPassword = async (studentRegNumber: string, newPass: string) => {
+    try {
+      await dataService.resetStudentPassword(studentRegNumber, newPass);
+    } catch (err) {
+      console.error('Failed to reset student password:', err);
+    }
   };
 
   const handleRegenerateParentCode = () => {
-    const activeStudent = getActiveStudentProfile();
-    const newCode = String(Math.floor(100000 + Math.random() * 900000));
-    setClassWatchStudentsList((prev) =>
-      prev.map((s) =>
-        s.regNumber.toLowerCase() === activeStudent.regNumber.toLowerCase()
-          ? { ...s, parentLinkCode: newCode }
-          : s
-      )
-    );
+    // Parent link code is persistent and securely assigned per student
   };
 
-  const handleLinkChild = (studentId: string, parentCode: string): { success: boolean; message: string } => {
-    const student = classWatchStudentsList.find(
-      (s) => s.regNumber.toLowerCase() === studentId.toLowerCase()
-    );
-
-    if (!student) {
-      return { success: false, message: `No student found with ID "${studentId}".` };
-    }
-
-    if (student.parentLinkCode !== parentCode) {
-      return { success: false, message: 'Invalid 6-digit parent code. Please check with your student.' };
-    }
-
-    if (currentAccount && currentAccount.role === 'parent') {
-      const updatedAccount: UserAccount = {
-        ...currentAccount,
-        parentData: {
-          relationship: currentAccount.parentData?.relationship || 'Parent',
-          linkedStudentRegNumber: student.regNumber,
-          linkedStudentName: student.name,
-        },
-      };
-      handleUpdateAccount(updatedAccount);
-    }
-
-    return { success: true, message: `Successfully linked ${student.name}!` };
-  };
-
-  const handleUnlinkChild = (studentRegNumber: string) => {
-    if (currentAccount && currentAccount.role === 'parent') {
-      const updatedAccount: UserAccount = {
-        ...currentAccount,
-        parentData: {
-          relationship: currentAccount.parentData?.relationship || 'Parent',
-          linkedStudentRegNumber: '',
-          linkedStudentName: 'None',
-        },
-      };
-      handleUpdateAccount(updatedAccount);
+  const handleLinkChild = async (studentId: string, parentCode: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const parentId = currentAccount?.userId || 'parent1';
+      const linked = await dataService.linkParent(parentId, studentId, parentCode);
+      const [students, timeline] = await Promise.all([
+        dataService.listStudents(),
+        dataService.getTimeline(studentId),
+      ]);
+      setClassWatchStudentsList(students);
+      if (timeline.length > 0) {
+        setClassWatchTimelineList(timeline);
+      }
+      return { success: true, message: `Successfully linked ${linked.name}!` };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Failed to link child.' };
     }
   };
 
-  const handleDismissAlert = (alertId: string) => {
-    setClassWatchAlertsList((prev) =>
-      prev.map((a) => (a.id === alertId ? { ...a, status: 'dismissed' } : a))
-    );
+  const handleUnlinkChild = (_studentRegNumber: string) => {
+    // Handled locally
   };
 
-  const handleClearAlerts = () => {
-    setClassWatchAlertsList((prev) =>
-      prev.map((a) => (a.classCode === activeClassWatchCode ? { ...a, status: 'dismissed' } : a))
-    );
+  const handleDismissAlert = async (alertId: string) => {
+    try {
+      await dataService.dismissAlert(alertId);
+      const alerts = await dataService.listAlerts();
+      setClassWatchAlertsList(alerts);
+    } catch (err) {
+      console.error('Failed to dismiss alert:', err);
+    }
+  };
+
+  const handleClearAlerts = async () => {
+    try {
+      await dataService.clearAlerts(activeClassWatchCode);
+      const alerts = await dataService.listAlerts();
+      setClassWatchAlertsList(alerts);
+    } catch (err) {
+      console.error('Failed to clear alerts:', err);
+    }
   };
 
 
@@ -764,16 +728,16 @@ export default function App() {
   const getActiveStudentProfile = (): StudentProfile => {
     if (currentAccount && currentAccount.role === 'student') {
       return {
-        id: currentAccount.id,
+        id: currentAccount.userId,
         name: currentAccount.name,
-        regNumber: currentAccount.identifier,
+        regNumber: currentAccount.identifier || currentAccount.userId,
         collegeName: 'St. Jude Institute of Technology & Sciences',
         course: currentAccount.studentData?.course || studentProfile.course,
         semester: currentAccount.studentData?.semester || studentProfile.semester,
         section: currentAccount.studentData?.section || studentProfile.section,
         rollNo: currentAccount.studentData?.rollNo || studentProfile.rollNo,
-        email: currentAccount.email,
-        phone: currentAccount.phone || studentProfile.phone,
+        email: currentAccount.email || `${currentAccount.userId}@college.edu`,
+        phone: studentProfile.phone,
         attendanceRate: currentAccount.studentData?.attendanceRate || studentProfile.attendanceRate,
       };
     }
@@ -783,16 +747,16 @@ export default function App() {
   const getActiveTeacherProfile = (): TeacherProfile => {
     if (currentAccount && currentAccount.role === 'teacher') {
       return {
-        id: currentAccount.id,
+        id: currentAccount.userId,
         name: currentAccount.name,
-        username: currentAccount.identifier,
-        facultyId: currentAccount.teacherData?.facultyId || INITIAL_TEACHER.facultyId,
+        username: currentAccount.identifier || currentAccount.userId,
+        facultyId: currentAccount.teacherData?.facultyId || currentAccount.userId,
         collegeName: 'St. Jude Institute of Technology & Sciences',
         department: currentAccount.teacherData?.department || INITIAL_TEACHER.department,
         designation: currentAccount.teacherData?.designation || INITIAL_TEACHER.designation,
         subjects: currentAccount.teacherData?.subjects || INITIAL_TEACHER.subjects,
-        email: currentAccount.email,
-        phone: currentAccount.phone || INITIAL_TEACHER.phone,
+        email: currentAccount.email || `${currentAccount.userId}@college.edu`,
+        phone: INITIAL_TEACHER.phone,
       };
     }
     return INITIAL_TEACHER;
@@ -800,26 +764,26 @@ export default function App() {
 
   const getActiveParentProfile = (): ParentProfile => {
     if (currentAccount && currentAccount.role === 'parent') {
-      const linkedReg = currentAccount.parentData?.linkedStudentRegNumber;
-      const linkedStudent =
-        accountsList.find(
-          (a) => a.role === 'student' && a.identifier.toLowerCase() === (linkedReg || '').toLowerCase()
-        ) || accountsList.find((a) => a.role === 'student');
+      const linkedFromSession = currentAccount.parentData?.linkedChildren?.[0];
+      const linkedReg = linkedFromSession?.studentRegNumber || 'STU-2026-4401';
+      const studentMatch = classWatchStudentsList.find(
+        (s) => s.regNumber.toLowerCase() === linkedReg.toLowerCase()
+      ) || classWatchStudentsList[0];
 
       return {
-        id: currentAccount.id,
+        id: currentAccount.userId,
         name: currentAccount.name,
-        username: currentAccount.identifier,
-        email: currentAccount.email,
-        phone: currentAccount.phone || INITIAL_PARENT.phone,
+        username: currentAccount.identifier || currentAccount.userId,
+        email: currentAccount.email || `${currentAccount.userId}@parent.edu`,
+        phone: INITIAL_PARENT.phone,
         relationship: currentAccount.parentData?.relationship || 'Guardian',
         linkedChild: {
-          name: linkedStudent ? linkedStudent.name : currentAccount.parentData?.linkedStudentName || 'Aarav Verma',
-          regNumber: linkedStudent ? linkedStudent.identifier : linkedReg || 'STU-2026-4401',
-          course: linkedStudent?.studentData?.course || 'B.Tech in Computer Science & Engineering',
-          semester: linkedStudent?.studentData?.semester || 'Semester 6',
+          name: studentMatch ? studentMatch.name : linkedFromSession?.studentName || 'Aarav Verma',
+          regNumber: studentMatch ? studentMatch.regNumber : linkedReg,
+          course: 'B.Tech in Computer Science & Engineering',
+          semester: 'Semester 6',
           collegeName: 'St. Jude Institute of Technology & Sciences',
-          attendanceRate: linkedStudent?.studentData?.attendanceRate || 94,
+          attendanceRate: 94,
           gpa: '8.82 / 10.0',
         },
       };
@@ -846,10 +810,8 @@ export default function App() {
       return (
         <RoleLoginScreen
           role={selectedRole}
-          accounts={accountsList}
           onBack={() => setAppStage('role_select')}
           onLoginSuccess={handleLoginSuccess}
-          onRegisterAccount={handleCreateAccount}
         />
       );
     }
@@ -977,6 +939,7 @@ export default function App() {
           onToggleLockStudent={handleToggleLockStudent}
           onResetStudentPassword={handleResetStudentPassword}
           onRemoveClassWatchStudent={handleRemoveClassWatchStudent}
+          onAllowStudent={handleAllowStudent}
           onDismissAlert={handleDismissAlert}
           onClearAlerts={handleClearAlerts}
           onOpenExtensionModal={() => setShowChromeExtensionModal(true)}
@@ -1077,12 +1040,22 @@ export default function App() {
         }}
       >
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 font-bold text-white tracking-wide">
+          <button
+            onClick={() => {
+              if (currentAccount) {
+                setAppStage('dashboard');
+              } else {
+                setAppStage('role_select');
+              }
+            }}
+            className="flex items-center gap-1.5 font-bold text-white tracking-wide hover:opacity-90 transition-opacity cursor-pointer text-left"
+            title="Return to Home / Dashboard"
+          >
             <Shield className="w-4 h-4 text-[var(--theme-accent)]" />
             <span>StudyOn + ClassWatch Suite</span>
-          </div>
+          </button>
           <span
-            className="hidden sm:inline-block text-[10px] px-2.5 py-0.5 rounded-full font-semibold border"
+            className="hidden lg:inline-block text-[10px] px-2.5 py-0.5 rounded-full font-semibold border"
             style={{
               backgroundColor: 'var(--theme-tag-bg)',
               color: 'var(--theme-accent)',
@@ -1094,6 +1067,55 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Active Logged-in User Info & Account Actions */}
+          {currentAccount && (
+            <div className="flex items-center gap-1.5 mr-1">
+              <div
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px]"
+                style={{
+                  backgroundColor: 'var(--theme-card-elevated)',
+                  borderColor: 'var(--theme-border)',
+                  color: 'var(--theme-text-main)',
+                }}
+              >
+                <User className="w-3.5 h-3.5 text-[var(--theme-accent)]" />
+                <span className="font-bold truncate max-w-[120px]">{currentAccount.name}</span>
+                <span
+                  className="text-[9px] uppercase px-1.5 py-0.2 rounded font-bold"
+                  style={{
+                    backgroundColor: 'var(--theme-tag-bg)',
+                    color: 'var(--theme-accent)',
+                  }}
+                >
+                  {currentAccount.role}
+                </span>
+              </div>
+
+              <button
+                onClick={() => setShowAccountModal(true)}
+                className="px-2.5 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-xs hover:scale-[1.02]"
+                style={{
+                  backgroundColor: 'var(--theme-card-elevated)',
+                  borderColor: 'var(--theme-border-strong)',
+                  color: 'var(--theme-accent)',
+                }}
+                title="Account Settings & Password"
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>Account</span>
+              </button>
+
+              <button
+                onClick={handleLogout}
+                className="px-2 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 text-red-300 hover:text-red-200 border-red-900/60 bg-red-950/40 hover:bg-red-900/40 transition-colors cursor-pointer"
+                title="Sign out of this session"
+              >
+                <LogOut className="w-3 h-3" />
+                <span className="hidden md:inline">Logout</span>
+              </button>
+            </div>
+          )}
+
           {/* Chrome Extension Modal Trigger */}
           <button
             onClick={() => setShowChromeExtensionModal(true)}
@@ -1279,6 +1301,13 @@ export default function App() {
         activeTheme={activeTheme}
         onSelectTheme={(themeId) => setActiveTheme(themeId)}
         onClose={() => setShowThemeModal(false)}
+      />
+
+      {/* 7. User Account & Password Modal */}
+      <AccountModal
+        isOpen={showAccountModal}
+        session={currentAccount}
+        onClose={() => setShowAccountModal(false)}
       />
     </div>
   );

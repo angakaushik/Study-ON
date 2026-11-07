@@ -99,7 +99,7 @@ interface StudentDashboardProps {
   classWatchClasses?: ClassWatchClass[];
   classWatchStudentState?: ClassWatchStudent;
   soundEnabled?: boolean;
-  onJoinClassWatch?: (code: string) => { success: boolean; message: string };
+  onJoinClassWatch?: (code: string) => Promise<{ success: boolean; message: string }> | { success: boolean; message: string };
   onLeaveClassWatch?: () => void;
   onReportDomain?: (domain: string) => void;
   onRegenerateParentCode?: () => void;
@@ -137,7 +137,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   classWatchClasses = [],
   classWatchStudentState,
   soundEnabled = true,
-  onJoinClassWatch = () => ({ success: true, message: 'Joined' }),
+  onJoinClassWatch = async () => ({ success: true, message: 'Joined' }),
   onLeaveClassWatch = () => {},
   onReportDomain = () => {},
   onRegenerateParentCode = () => {},

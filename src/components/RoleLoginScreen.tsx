@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { UserRole, UserAccount } from '../types.ts';
+import React, { useState } from 'react';
+import { UserRole } from '../types.ts';
 import { DEMO_CREDENTIALS } from '../data/mockData.ts';
 import { Logo } from './Logo.tsx';
+import { dataService, UserSession } from '../lib/dataService.ts';
 import {
   ArrowLeft,
   Eye,
@@ -9,28 +10,20 @@ import {
   RefreshCw,
   KeyRound,
   UserCheck,
-  ShieldCheck,
   UserPlus,
   AlertCircle,
-  Check,
-  Lock,
-  User,
 } from 'lucide-react';
 
 interface RoleLoginScreenProps {
   role: UserRole;
-  accounts: UserAccount[];
   onBack: () => void;
-  onLoginSuccess: (role: UserRole, account?: UserAccount) => void;
-  onRegisterAccount?: (newAccount: UserAccount) => void;
+  onLoginSuccess: (role: UserRole, session?: UserSession) => void;
 }
 
 export const RoleLoginScreen: React.FC<RoleLoginScreenProps> = ({
   role,
-  accounts,
   onBack,
   onLoginSuccess,
-  onRegisterAccount,
 }) => {
   const demoInfo = DEMO_CREDENTIALS[role];
 
@@ -44,9 +37,6 @@ export const RoleLoginScreen: React.FC<RoleLoginScreenProps> = ({
   const [errorMessage, setErrorMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Rate-limiting state: track failed attempts within last 5 minutes
-  const [failedAttempts, setFailedAttempts] = useState<{ id: string; time: number }[]>([]);
-
   // Registration form state
   const [regUserId, setRegUserId] = useState('');
   const [regFullName, setRegFullName] = useState('');
@@ -54,9 +44,6 @@ export const RoleLoginScreen: React.FC<RoleLoginScreenProps> = ({
   const [regPassword, setRegPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [regError, setRegError] = useState('');
-
-  // Filter accounts belonging to this role
-  const roleAccounts = accounts.filter((a) => a.role === role);
 
   const roleTitleMap = {
     student: 'Student Login',
@@ -66,51 +53,38 @@ export const RoleLoginScreen: React.FC<RoleLoginScreenProps> = ({
   };
 
   const identifierLabelMap = {
-    student: 'Student ID / Reg Number',
+    student: 'Student User ID',
     teacher: 'Faculty User ID',
     parent: 'Parent User ID',
     principal: 'Administrative User ID',
   };
 
   const identifierPlaceholderMap = {
-    student: 'e.g. STU-2026-4401',
-    teacher: 'e.g. prof.sharma',
-    parent: 'e.g. parent.rohit',
+    student: 'e.g. aarav.verma',
+    teacher: 'e.g. teacher.menon',
+    parent: 'e.g. parent.verma',
     principal: 'e.g. principal.menon',
   };
 
-  const handleSelectAccountToFill = (acc: { identifier: string; password?: string }) => {
-    setIdentifier(acc.identifier);
-    setPassword(acc.password || 'studentpassword');
+  const handleSelectAccountToFill = (idVal: string, passVal: string) => {
+    setIdentifier(idVal);
+    setPassword(passVal);
     setErrorMessage('');
   };
 
   const handleAutoFillDemo = () => {
     setIdentifier(demoInfo.identifier);
-    setPassword(demoInfo.password);
+    setPassword(demoInfo.password || 'demo123');
     setErrorMessage('');
   };
 
-  // Check rate limit: 5 wrong passwords for the same ID in 5 minutes
-  const isRateLimited = (cleanId: string): boolean => {
-    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-    const recentFailsForId = failedAttempts.filter(
-      (fa) => fa.id === cleanId && fa.time >= fiveMinutesAgo
-    );
-    return recentFailsForId.length >= 5;
-  };
-
-  const recordFailedAttempt = (cleanId: string) => {
-    setFailedAttempts((prev) => [...prev, { id: cleanId, time: Date.now() }]);
-  };
-
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  // Handle Login via DataService
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
     const cleanId = identifier.trim().toLowerCase();
 
-    // Validations
     if (!cleanId) {
       setErrorMessage(`Please enter your ${identifierLabelMap[role].toLowerCase()}.`);
       return;
@@ -126,84 +100,29 @@ export const RoleLoginScreen: React.FC<RoleLoginScreenProps> = ({
       return;
     }
 
-    if (isRateLimited(cleanId)) {
-      setErrorMessage('Too many tries, wait 5 minutes');
-      return;
-    }
-
     setLoading(true);
 
-    // Fast login under 1 second (150ms simulated network latency)
-    setTimeout(() => {
+    try {
+      const session = await dataService.login(cleanId, password);
+
+      // Verify role alignment
+      if (session.role !== role) {
+        const capActual = session.role.charAt(0).toUpperCase() + session.role.slice(1);
+        setErrorMessage(`That account is registered as a ${capActual}. Please switch to the ${capActual} login.`);
+        setLoading(false);
+        return;
+      }
+
+      onLoginSuccess(session.role, session);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Login failed. Please try again.');
+    } finally {
       setLoading(false);
-
-      // 1. Principal login check
-      if (role === 'principal') {
-        const crossCheck = accounts.find((a) => a.identifier.toLowerCase() === cleanId);
-        if (crossCheck) {
-          recordFailedAttempt(cleanId);
-          setErrorMessage('Wrong ID or password');
-          return;
-        }
-
-        if (cleanId === demoInfo.identifier.toLowerCase() && (password === demoInfo.password || password === 'demo123')) {
-          onLoginSuccess('principal');
-        } else {
-          recordFailedAttempt(cleanId);
-          setErrorMessage('Wrong ID or password');
-        }
-        return;
-      }
-
-      // 2. Accounts roster check
-      const matchedAccount = accounts.find((a) => a.identifier.toLowerCase() === cleanId);
-
-      if (matchedAccount) {
-        // Role mismatch check
-        if (matchedAccount.role !== role) {
-          recordFailedAttempt(cleanId);
-          const capActual = matchedAccount.role.charAt(0).toUpperCase() + matchedAccount.role.slice(1);
-          setErrorMessage(`That account is registered as a ${capActual}. Please switch to the ${capActual} login.`);
-          return;
-        }
-
-        if (matchedAccount.status === 'Suspended') {
-          setErrorMessage('This account is suspended. Please contact the institution administration.');
-          return;
-        }
-
-        if (matchedAccount.password !== password && password !== 'demo123') {
-          recordFailedAttempt(cleanId);
-          if (isRateLimited(cleanId)) {
-            setErrorMessage('Too many tries, wait 5 minutes');
-          } else {
-            setErrorMessage('Wrong ID or password');
-          }
-          return;
-        }
-
-        onLoginSuccess(role, matchedAccount);
-        return;
-      }
-
-      // 3. Fallback demo account check
-      if (cleanId === demoInfo.identifier.toLowerCase() && (password === demoInfo.password || password === 'demo123')) {
-        onLoginSuccess(role);
-        return;
-      }
-
-      // No match
-      recordFailedAttempt(cleanId);
-      if (isRateLimited(cleanId)) {
-        setErrorMessage('Too many tries, wait 5 minutes');
-      } else {
-        setErrorMessage('Wrong ID or password');
-      }
-    }, 180);
+    }
   };
 
-  // Handle Registration
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  // Handle Registration via DataService
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegError('');
 
@@ -227,62 +146,23 @@ export const RoleLoginScreen: React.FC<RoleLoginScreenProps> = ({
       return;
     }
 
-    // Uniqueness check (case-insensitive)
-    const exists = accounts.some((a) => a.identifier.toLowerCase() === cleanId);
-    if (exists || cleanId === 'principal.menon') {
-      setRegError('That ID is already taken');
-      return;
-    }
-
     setLoading(true);
 
-    setTimeout(() => {
-      setLoading(false);
-      const newAccount: UserAccount = {
-        id: `acc-${regRole}-${Date.now()}`,
+    try {
+      const session = await dataService.register({
+        id: cleanId,
         name: cleanName,
         role: regRole,
-        identifier: cleanId,
         password: regPassword,
-        status: 'Active',
-        createdAt: 'Today',
-        email: `${cleanId}@stjude.edu`,
-        studentData:
-          regRole === 'student'
-            ? {
-                course: 'B.Tech in Computer Science & Engineering',
-                semester: 'Semester 6',
-                section: 'Section B',
-                rollNo: String(Math.floor(20 + Math.random() * 50)),
-                attendanceRate: 100,
-              }
-            : undefined,
-        teacherData:
-          regRole === 'teacher'
-            ? {
-                facultyId: `FAC-${Math.floor(100 + Math.random() * 900)}`,
-                department: 'Department of Computer Science',
-                designation: 'Faculty Member',
-                subjects: ['Data Structures & Algorithms'],
-              }
-            : undefined,
-        parentData:
-          regRole === 'parent'
-            ? {
-                relationship: 'Parent/Guardian',
-                linkedStudentRegNumber: 'STU-2026-4401',
-                linkedStudentName: 'Aarav Verma',
-              }
-            : undefined,
-      };
+      });
 
-      if (onRegisterAccount) {
-        onRegisterAccount(newAccount);
-      }
-
-      // Immediate redirect to dashboard
-      onLoginSuccess(regRole, newAccount);
-    }, 200);
+      // Immediately log in and open the corresponding dashboard
+      onLoginSuccess(session.role, session);
+    } catch (err: any) {
+      setRegError(err.message || 'Registration failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -352,7 +232,7 @@ export const RoleLoginScreen: React.FC<RoleLoginScreenProps> = ({
             <>
               {/* Error Banner */}
               {errorMessage && (
-                <div className="mb-5 p-3 rounded-xl bg-rose-950/80 border border-rose-500/50 text-xs text-rose-300 flex items-start gap-2">
+                <div className="mb-5 p-3 rounded-xl bg-rose-950/80 border border-rose-500/50 text-xs text-rose-300 flex items-start gap-2 animate-fadeIn">
                   <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                   <div>
                     <span className="font-semibold">{errorMessage}</span>
@@ -401,14 +281,17 @@ export const RoleLoginScreen: React.FC<RoleLoginScreenProps> = ({
                   </div>
                 </div>
 
-                {/* Submit Button */}
+                {/* Submit Button with Spinner */}
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 px-4 rounded-xl font-bold text-sm text-[#0f1c18] bg-[#5cc79a] hover:bg-[#6ee4b3] transition-colors shadow-lg flex items-center justify-center gap-2 mt-4 cursor-pointer disabled:opacity-70"
+                  className="w-full py-3 px-4 rounded-xl font-bold text-sm text-[#0f1c18] bg-[#5cc79a] hover:bg-[#6ee4b3] transition-colors shadow-lg flex items-center justify-center gap-2 mt-4 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {loading ? (
-                    <span>Authenticating...</span>
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Authenticating...</span>
+                    </>
                   ) : (
                     <>
                       <UserCheck className="w-4 h-4" />
@@ -424,50 +307,27 @@ export const RoleLoginScreen: React.FC<RoleLoginScreenProps> = ({
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-white">
                       <KeyRound className="w-3.5 h-3.5 text-[#5cc79a]" />
-                      <span>Quick Demo Logins</span>
+                      <span>Default Demo Account</span>
                     </div>
                     <span className="text-[10px] text-[#5cc79a] bg-[#16271f] px-2 py-0.5 rounded-full border border-[#233a30] font-semibold">
-                      Instant Access
+                      Instant Fill
                     </span>
                   </div>
 
-                  <div className="space-y-1.5 mb-2.5 max-h-36 overflow-y-auto">
-                    {roleAccounts.length > 0 ? (
-                      roleAccounts.map((acc) => (
-                        <div
-                          key={acc.id}
-                          className="p-2 rounded-xl bg-[#16271f] border border-[#233a30] flex items-center justify-between text-xs hover:border-[#385e4c] transition-colors"
-                        >
-                          <div className="truncate pr-2">
-                            <div className="font-bold text-white truncate">{acc.name}</div>
-                            <div className="text-[11px] font-mono text-[#5cc79a]">
-                              {acc.identifier} · <span className="text-[#94a3b8]">{acc.password}</span>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleSelectAccountToFill(acc)}
-                            className="px-2.5 py-1 rounded-lg bg-[#1f3d30] hover:bg-[#284f3e] text-[#5cc79a] text-[11px] font-bold shrink-0 border border-[#3b6754] cursor-pointer"
-                          >
-                            Fill
-                          </button>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="p-2 rounded-xl bg-[#16271f] border border-[#233a30] flex items-center justify-between text-xs">
-                        <div>
-                          <div className="font-bold text-white">{demoInfo.roleLabel}</div>
-                          <div className="text-[11px] font-mono text-[#5cc79a]">{demoInfo.identifier}</div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleAutoFillDemo}
-                          className="px-2.5 py-1 rounded-lg bg-[#1f3d30] hover:bg-[#284f3e] text-[#5cc79a] text-[11px] font-bold border border-[#3b6754] cursor-pointer"
-                        >
-                          Fill
-                        </button>
+                  <div className="p-2.5 rounded-xl bg-[#16271f] border border-[#233a30] flex items-center justify-between text-xs">
+                    <div>
+                      <div className="font-bold text-white">{demoInfo.roleLabel}</div>
+                      <div className="text-[11px] font-mono text-[#5cc79a]">
+                        {demoInfo.identifier} · <span className="text-[#94a3b8]">demo123</span>
                       </div>
-                    )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAutoFillDemo}
+                      className="px-3 py-1 rounded-lg bg-[#1f3d30] hover:bg-[#284f3e] text-[#5cc79a] text-[11px] font-bold border border-[#3b6754] cursor-pointer transition-colors"
+                    >
+                      Fill
+                    </button>
                   </div>
                 </div>
               </div>
@@ -476,7 +336,7 @@ export const RoleLoginScreen: React.FC<RoleLoginScreenProps> = ({
             /* AUTH MODE 2: REGISTER FORM */
             <form onSubmit={handleRegisterSubmit} className="space-y-4">
               {regError && (
-                <div className="p-3 rounded-xl bg-rose-950/80 border border-rose-500/50 text-xs text-rose-300 flex items-start gap-2">
+                <div className="p-3 rounded-xl bg-rose-950/80 border border-rose-500/50 text-xs text-rose-300 flex items-start gap-2 animate-fadeIn">
                   <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                   <span>{regError}</span>
                 </div>
@@ -491,13 +351,13 @@ export const RoleLoginScreen: React.FC<RoleLoginScreenProps> = ({
                   type="text"
                   value={regUserId}
                   onChange={(e) => setRegUserId(e.target.value)}
-                  placeholder="letters, numbers, underscore only"
+                  placeholder="e.g. rahul_student"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-[#2a473b] focus:border-[#5cc79a] text-sm text-white placeholder:text-[#64748b] bg-[#0f1c18] outline-none transition-all"
                   autoComplete="username"
                   required
                 />
-                <p className="text-[10px] text-[#64748b] mt-1 leading-tight">
-                  Letters, numbers, underscore, 3-20 chars, case-insensitive, unique. This is what you type to log in, not the class code.
+                <p className="text-[10px] text-[#5cc79a]/90 mt-1 leading-tight">
+                  Letters, numbers, underscore, 3-20 chars, case-insensitive, unique. This is what you log in with, not the class code or an email.
                 </p>
               </div>
 
@@ -510,7 +370,7 @@ export const RoleLoginScreen: React.FC<RoleLoginScreenProps> = ({
                   type="text"
                   value={regFullName}
                   onChange={(e) => setRegFullName(e.target.value)}
-                  placeholder="e.g. Maya Patel"
+                  placeholder="e.g. Rahul Sharma"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-[#2a473b] focus:border-[#5cc79a] text-sm text-white placeholder:text-[#64748b] bg-[#0f1c18] outline-none transition-all"
                   required
                 />
@@ -560,10 +420,19 @@ export const RoleLoginScreen: React.FC<RoleLoginScreenProps> = ({
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 px-4 rounded-xl font-bold text-sm text-[#0f1c18] bg-[#5cc79a] hover:bg-[#6ee4b3] transition-colors shadow-lg flex items-center justify-center gap-2 mt-4 cursor-pointer disabled:opacity-70"
+                className="w-full py-3 px-4 rounded-xl font-bold text-sm text-[#0f1c18] bg-[#5cc79a] hover:bg-[#6ee4b3] transition-colors shadow-lg flex items-center justify-center gap-2 mt-4 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <UserPlus className="w-4 h-4" />
-                <span>Register & Open Dashboard</span>
+                {loading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Registering...</span>
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="w-4 h-4" />
+                    <span>Register & Open Dashboard</span>
+                  </>
+                )}
               </button>
             </form>
           )}

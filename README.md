@@ -18,9 +18,9 @@ Converted completely into a single color dark green aesthetic, featuring the use
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start & Testing
 
-### Installation & Run
+### Running the App
 ```bash
 # Install dependencies
 npm install
@@ -31,9 +31,33 @@ npm run dev
 
 ### Running Automated Verification Tests
 ```bash
-# Run the 9-scenario e2e test suite
+# Run the complete test suite (DataService + E2E domain rules)
+npm test
+
+# Or run individual test suites:
+node test/dataService.test.js
 node test/e2e.js
 ```
+
+### 🧪 Testing Real-Time Monitoring Across Two Browser Tabs
+To test the live teacher-student synchronization:
+1. Open the app in two separate browser tabs (e.g. `http://localhost:3000` in Tab 1 and Tab 2).
+   * **Note on embedded iframes**: BroadcastChannel cross-tab events require real separate browser windows or tabs on the same origin.
+2. In **Tab 1**, log in as **Teacher** (or click Quick Demo -> Teacher).
+   * Open the **ClassWatch** monitoring tab (Class Code `4892`).
+3. In **Tab 2**, log in as **Student** (or click Quick Demo -> Student).
+   * Notice that **each tab has its own isolated session** in `sessionStorage` (Teacher in Tab 1 and Student in Tab 2 remain logged in simultaneously without conflict).
+4. In Tab 2, enter class code `4892` and click **Join Classroom**.
+5. Switch to Tab 1: The student card appears **instantly** without refreshing the page!
+6. In Tab 2 (Student Tab Simulator), click **"YouTube"**:
+   * Tab 1 instantly sounds a chime and displays a **HIGH Severity Alert**.
+7. In Tab 1 (Teacher), click **"Lock"**:
+   * Tab 2 instantly displays the full-screen lock overlay. Click **"Unlock"** in Tab 1 to clear it.
+8. Closing Tab 2 immediately marks the student as **Offline** in Tab 1.
+
+### 🌐 Cross-Device / Cloud Backend Notice
+* **Local Multi-Tab**: The built-in `LocalDataService` uses PBKDF2 password encryption, `localStorage` for persistent shared classroom data, `sessionStorage` for isolated tab logins, and `BroadcastChannel` with `storage` fallbacks for sub-millisecond cross-tab updates.
+* **Different Physical Devices**: Connecting multiple physical computers or phones over a network requires an external cloud database. A clean `FirebaseDataService` (or Supabase) architecture stub is provided in `src/lib/dataService.ts`. Set `VITE_DATA_BACKEND=firebase` and provision credentials to activate real multi-device cloud synchronisation.
 
 ---
 

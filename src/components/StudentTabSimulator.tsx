@@ -16,6 +16,7 @@ import {
   playLockSound,
   playSuccessChime,
 } from '../utils/soundEffects.ts';
+import { dataService } from '../lib/dataService.ts';
 import {
   Shield,
   Lock,
@@ -40,7 +41,7 @@ interface StudentTabSimulatorProps {
   classes: ClassWatchClass[];
   currentStudentState?: ClassWatchStudent;
   soundEnabled: boolean;
-  onJoinClass: (code: string) => { success: boolean; message: string };
+  onJoinClass: (code: string) => Promise<{ success: boolean; message: string }> | { success: boolean; message: string };
   onLeaveClass: () => void;
   onReportDomain: (domain: string) => void;
   onRegenerateParentCode: () => void;
@@ -64,6 +65,30 @@ export const StudentTabSimulator: React.FC<StudentTabSimulatorProps> = ({
   const [customDomainError, setCustomDomainError] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
 
+  // 5-second presence heartbeat & immediate offline mark on unload
+  React.useEffect(() => {
+    if (!currentStudentState?.id || !currentStudentState.classCode || currentStudentState.isRemoved) return;
+
+    dataService.sendPresence(currentStudentState.id, false);
+
+    const heartbeatTimer = setInterval(() => {
+      dataService.sendPresence(currentStudentState.id, false);
+    }, 5000);
+
+    const handleUnload = () => {
+      dataService.sendPresence(currentStudentState.id, true);
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('pagehide', handleUnload);
+
+    return () => {
+      clearInterval(heartbeatTimer);
+      window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('pagehide', handleUnload);
+    };
+  }, [currentStudentState?.id, currentStudentState?.classCode, currentStudentState?.isRemoved]);
+
   // Active joined class
   const joinedClass = currentStudentState
     ? classes.find((c) => c.code === currentStudentState.classCode)
@@ -72,7 +97,7 @@ export const StudentTabSimulator: React.FC<StudentTabSimulatorProps> = ({
   const isLocked = currentStudentState?.isLocked || false;
   const isOffTask = currentStudentState?.status === 'Off task';
 
-  const handleJoinSubmit = (e: React.FormEvent) => {
+  const handleJoinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setJoinError('');
 
@@ -82,12 +107,16 @@ export const StudentTabSimulator: React.FC<StudentTabSimulatorProps> = ({
       return;
     }
 
-    const res = onJoinClass(trimmed);
-    if (!res.success) {
-      setJoinError(res.message);
-    } else {
-      setInputClassCode('');
-      if (soundEnabled) playSuccessChime();
+    try {
+      const res = await onJoinClass(trimmed);
+      if (!res.success) {
+        setJoinError(res.message);
+      } else {
+        setInputClassCode('');
+        if (soundEnabled) playSuccessChime();
+      }
+    } catch (err: any) {
+      setJoinError(err.message || 'Failed to join class');
     }
   };
 
@@ -215,7 +244,7 @@ export const StudentTabSimulator: React.FC<StudentTabSimulatorProps> = ({
       </div>
 
       {/* JOIN CLASSROOM VS ACTIVE CLASS SESSION */}
-      {!currentStudentState || currentStudentState.isRemoved ? (
+      {!currentStudentState || !currentStudentState.classCode || currentStudentState.isRemoved ? (
         <div className="bg-[#16271f] border border-[#233a30] rounded-2xl p-6 text-white shadow-xl max-w-lg mx-auto">
           <div className="text-center mb-5">
             <div className="w-12 h-12 rounded-2xl bg-[#1f3d30] border border-[#5cc79a]/40 flex items-center justify-center mx-auto text-[#5cc79a] mb-3">

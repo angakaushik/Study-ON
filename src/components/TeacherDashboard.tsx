@@ -92,6 +92,7 @@ interface TeacherDashboardProps {
   onToggleLockStudent?: (studentId: string) => void;
   onResetStudentPassword?: (studentRegNumber: string, newPass: string) => void;
   onRemoveClassWatchStudent?: (studentId: string) => void;
+  onAllowStudent?: (studentId: string) => void;
   onDismissAlert?: (alertId: string) => void;
   onClearAlerts?: () => void;
   onOpenExtensionModal?: () => void;
@@ -136,6 +137,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   onToggleLockStudent = () => {},
   onResetStudentPassword = () => {},
   onRemoveClassWatchStudent = () => {},
+  onAllowStudent = () => {},
   onDismissAlert = () => {},
   onClearAlerts = () => {},
   onOpenExtensionModal = () => {},
@@ -670,6 +672,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             onToggleLockStudent={onToggleLockStudent}
             onResetStudentPassword={onResetStudentPassword}
             onRemoveStudent={onRemoveClassWatchStudent}
+            onAllowStudent={onAllowStudent}
             onDismissAlert={onDismissAlert}
             onClearAlerts={onClearAlerts}
             onOpenExtensionModal={onOpenExtensionModal}

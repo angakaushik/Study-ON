@@ -61,7 +61,7 @@ interface ParentDashboardProps {
   classWatchStudents?: ClassWatchStudent[];
   classWatchTimeline?: ClassWatchTimelineEvent[];
   classWatchAlerts?: ClassWatchAlert[];
-  onLinkChild?: (studentId: string, parentCode: string) => { success: boolean; message: string };
+  onLinkChild?: (studentId: string, parentCode: string) => Promise<{ success: boolean; message: string }> | { success: boolean; message: string };
   onUnlinkChild?: (studentRegNumber: string) => void;
 }
 
